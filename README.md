@@ -13,6 +13,9 @@ executes and verifies recovery — with durable workflows, full auditability, an
 > 4. [Functional Requirements](docs/design/04-functional-requirements.md)
 > 5. [Non-Functional Requirements](docs/design/05-non-functional-requirements.md)
 > 6. [Architecture](docs/design/06-architecture.md)
+> 7. [Component Diagram](docs/design/07-component-diagram.md)
+> 8. [Sequence Diagrams](docs/design/08-sequence-diagrams.md)
+> 9. [Database Design](docs/design/09-database-design.md)
 
 This README will be replaced by full project documentation as implementation lands.
 
