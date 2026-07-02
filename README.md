@@ -19,6 +19,10 @@ executes and verifies recovery — with durable workflows, full auditability, an
 > 10. [Folder Structure](docs/design/10-folder-structure.md)
 > 11. [Service Responsibilities](docs/design/11-service-responsibilities.md)
 > 12. [API Design](docs/design/12-api-design.md)
+> 13. [Agent Design](docs/design/13-agent-design.md)
+> 14. [State Management](docs/design/14-state-management.md)
+> 15. [Memory Architecture](docs/design/15-memory-architecture.md)
+> 16. [Tool Architecture](docs/design/16-tool-architecture.md)
 
 This README will be replaced by full project documentation as implementation lands.
 
