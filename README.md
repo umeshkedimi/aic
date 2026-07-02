@@ -27,6 +27,9 @@ executes and verifies recovery — with durable workflows, full auditability, an
 > 18. [Authentication](docs/design/18-authentication.md)
 > 19. [Authorization](docs/design/19-authorization.md)
 > 20. [Secrets Management](docs/design/20-secrets-management.md)
+> 21. [Observability](docs/design/21-observability.md)
+> 22. [Evaluation Strategy](docs/design/22-evaluation-strategy.md)
+> 23. [Human Approval Workflow](docs/design/23-human-approval-workflow.md)
 
 This README will be replaced by full project documentation as implementation lands.
 
