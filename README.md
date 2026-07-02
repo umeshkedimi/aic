@@ -16,6 +16,9 @@ executes and verifies recovery — with durable workflows, full auditability, an
 > 7. [Component Diagram](docs/design/07-component-diagram.md)
 > 8. [Sequence Diagrams](docs/design/08-sequence-diagrams.md)
 > 9. [Database Design](docs/design/09-database-design.md)
+> 10. [Folder Structure](docs/design/10-folder-structure.md)
+> 11. [Service Responsibilities](docs/design/11-service-responsibilities.md)
+> 12. [API Design](docs/design/12-api-design.md)
 
 This README will be replaced by full project documentation as implementation lands.
 
