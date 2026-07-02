@@ -30,6 +30,11 @@ executes and verifies recovery — with durable workflows, full auditability, an
 > 21. [Observability](docs/design/21-observability.md)
 > 22. [Evaluation Strategy](docs/design/22-evaluation-strategy.md)
 > 23. [Human Approval Workflow](docs/design/23-human-approval-workflow.md)
+> 24. [Retry Strategy](docs/design/24-retry-strategy.md)
+> 25. [Failure Recovery](docs/design/25-failure-recovery.md)
+> 26. [Rate Limiting](docs/design/26-rate-limiting.md)
+> 27. [Cost Optimization](docs/design/27-cost-optimization.md)
+> 28. [Scaling Strategy](docs/design/28-scaling-strategy.md)
 
 This README will be replaced by full project documentation as implementation lands.
 
