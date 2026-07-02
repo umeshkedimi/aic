@@ -23,6 +23,10 @@ executes and verifies recovery — with durable workflows, full auditability, an
 > 14. [State Management](docs/design/14-state-management.md)
 > 15. [Memory Architecture](docs/design/15-memory-architecture.md)
 > 16. [Tool Architecture](docs/design/16-tool-architecture.md)
+> 17. [Security Architecture](docs/design/17-security-architecture.md)
+> 18. [Authentication](docs/design/18-authentication.md)
+> 19. [Authorization](docs/design/19-authorization.md)
+> 20. [Secrets Management](docs/design/20-secrets-management.md)
 
 This README will be replaced by full project documentation as implementation lands.
 
