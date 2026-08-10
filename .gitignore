@@ -95,3 +95,4 @@ secrets/
 .local/
 tmp/
 temp/
+claude.local.md
