@@ -1,4 +1,4 @@
-# AIC — Agentic Incident Command
+# AIC — Agentic Incident Commander
 
 **A production-grade Agentic Reliability Platform for detecting, investigating, and safely
 remediating production incidents.**
