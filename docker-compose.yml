@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: aic
+      POSTGRES_PASSWORD: aic
+      POSTGRES_DB: aic
+    ports:
+      - "5432:5432"
+    volumes:
+      - aic-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aic -d aic"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+      target: aic-api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://aic:aic@postgres:5432/aic
+      REDIS_URL: redis://redis:6379/0
+      SERVICE_NAME: aic-api
+      ENVIRONMENT: dev
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  aic-postgres-data:
