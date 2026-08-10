@@ -3,9 +3,12 @@
 AIC is a production-grade Agentic Reliability Platform: a control loop that detects, investigates,
 explains, and safely remediates production incidents, and learns from every one it handles.
 
-> **Status: green-field reset.** Prior design docs and a Phase 1 scaffold existed in this repo's
+> **Status: design phase.** Prior design docs and a Phase 1 scaffold existed in this repo's
 > history and were deliberately cleared to rebuild around a single, deeply-engineered signature
-> incident lifecycle rather than broad upfront scaffolding. See git history for that prior work.
+> incident lifecycle rather than broad upfront scaffolding (see git history for that prior work).
+> The end-to-end design for that lifecycle is written up in
+> [`docs/design/01-signature-incident-lifecycle.md`](docs/design/01-signature-incident-lifecycle.md),
+> with key tradeoffs recorded as ADRs in [`docs/adr/`](docs/adr/). No code has been written yet.
 
 ## The standard this project is held to
 
