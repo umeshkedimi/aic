@@ -1,42 +1,30 @@
-# AIC — AI Incident Commander
+# AIC — Agentic Incident Command
 
-An enterprise agentic AI platform that autonomously investigates production incidents, performs
-root-cause analysis, proposes remediation behind policy guardrails, obtains human approval, and
-executes and verifies recovery — with durable workflows, full auditability, and LLMOps built in.
+AIC is a production-grade Agentic Reliability Platform: a control loop that detects, investigates,
+explains, and safely remediates production incidents, and learns from every one it handles.
 
-> **Status: design phase.** The system is being built in documented, buildable phases.
-> Design documents live in [`docs/design/`](docs/design/):
->
-> 1. [Executive Summary](docs/design/01-executive-summary.md)
-> 2. [Business Problem](docs/design/02-business-problem.md)
-> 3. [Enterprise Use Cases](docs/design/03-use-cases.md)
-> 4. [Functional Requirements](docs/design/04-functional-requirements.md)
-> 5. [Non-Functional Requirements](docs/design/05-non-functional-requirements.md)
-> 6. [Architecture](docs/design/06-architecture.md)
-> 7. [Component Diagram](docs/design/07-component-diagram.md)
-> 8. [Sequence Diagrams](docs/design/08-sequence-diagrams.md)
-> 9. [Database Design](docs/design/09-database-design.md)
-> 10. [Folder Structure](docs/design/10-folder-structure.md)
-> 11. [Service Responsibilities](docs/design/11-service-responsibilities.md)
-> 12. [API Design](docs/design/12-api-design.md)
-> 13. [Agent Design](docs/design/13-agent-design.md)
-> 14. [State Management](docs/design/14-state-management.md)
-> 15. [Memory Architecture](docs/design/15-memory-architecture.md)
-> 16. [Tool Architecture](docs/design/16-tool-architecture.md)
-> 17. [Security Architecture](docs/design/17-security-architecture.md)
-> 18. [Authentication](docs/design/18-authentication.md)
-> 19. [Authorization](docs/design/19-authorization.md)
-> 20. [Secrets Management](docs/design/20-secrets-management.md)
-> 21. [Observability](docs/design/21-observability.md)
-> 22. [Evaluation Strategy](docs/design/22-evaluation-strategy.md)
-> 23. [Human Approval Workflow](docs/design/23-human-approval-workflow.md)
-> 24. [Retry Strategy](docs/design/24-retry-strategy.md)
-> 25. [Failure Recovery](docs/design/25-failure-recovery.md)
-> 26. [Rate Limiting](docs/design/26-rate-limiting.md)
-> 27. [Cost Optimization](docs/design/27-cost-optimization.md)
-> 28. [Scaling Strategy](docs/design/28-scaling-strategy.md)
+> **Status: green-field reset.** Prior design docs and a Phase 1 scaffold existed in this repo's
+> history and were deliberately cleared to rebuild around a single, deeply-engineered signature
+> incident lifecycle rather than broad upfront scaffolding. See git history for that prior work.
 
-This README will be replaced by full project documentation as implementation lands.
+## The standard this project is held to
+
+This is not a demo, a tutorial, or "an LLM connected to some tools." It is a reliable production
+control loop that uses AI agents where reasoning is genuinely valuable, and deterministic
+engineering everywhere else. Depth on one complete lifecycle beats breadth across many shallow
+ones — every stage below is engineered deliberately, not stubbed.
+
+## The signature lifecycle
+
+```
+OBSERVE → DETECT → CORRELATE → INVESTIGATE → REASON → FORM RCA → PLAN REMEDIATION
+        → APPLY POLICY → APPROVE → ACT → VERIFY → RESOLVE → LEARN
+```
+
+The first milestone is one polished, end-to-end walkthrough of this loop against a single
+synthetic scenario: a bad deployment causes latency, 5xx errors, database connection pool
+exhaustion, and downstream checkout failures. Everything else — more sources, more agents, more
+integrations — is a depth pass added after that one path is solid, explainable, and tested.
 
 ## License
 
