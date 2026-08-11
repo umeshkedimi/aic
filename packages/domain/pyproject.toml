@@ -1,0 +1,19 @@
+[project]
+name = "aic-domain"
+version = "0.1.0"
+description = "Pure, zero-I/O domain models and the incident state machine."
+requires-python = ">=3.13"
+dependencies = [
+    "aic-common",
+    "pydantic>=2.9",
+]
+
+[tool.uv.sources]
+aic-common = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aic_domain"]
