@@ -1,0 +1,58 @@
+# The toy system's own Postgres — payment-service's database, distinct from
+# AIC's Alembic-managed system-of-record Postgres in packages/database.
+# emptyDir is intentional: this is a resettable fixture for the demo
+# scenario, not data anyone needs to survive a pod restart.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: aic-demo
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: payment
+            - name: POSTGRES_PASSWORD
+              value: payment
+            - name: POSTGRES_DB
+              value: payment
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "payment"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: aic-demo
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

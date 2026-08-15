@@ -1,0 +1,15 @@
+# Stable Service for payment-service; the Deployment itself is applied
+# dynamically by apps/toy-ops's deploy_payment_service.py (its pod template
+# — image, DB_POOL_SIZE, version — is the thing the signature scenario
+# redeploys), so it isn't a static manifest here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: aic-demo
+spec:
+  selector:
+    app: payment-service
+  ports:
+    - port: 8000
+      targetPort: 8000

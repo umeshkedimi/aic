@@ -1,0 +1,81 @@
+# Privilege separation per design doc §1.11 / ADR 0003: the investigation
+# path and the executor get distinct ServiceAccounts, bound to distinct
+# Roles, in the aic-demo namespace only. Nothing here is wired to a running
+# process yet — T7 (investigator) and T10 (executor) will reference these
+# by name via serviceAccountName. This task just makes the credentials
+# exist with the right shape.
+#
+# Note on aic-executor: `resourceNames` genuinely restricts `get`/`patch` to
+# the named Deployments, but the Kubernetes API server does not enforce
+# resourceNames on `list`/`watch` (a documented RBAC limitation — list/watch
+# can't be scoped to specific object names). The real privilege boundary
+# here is still meaningful: namespace-scoped, one resource kind
+# (deployments), no create/delete, no other resource kinds — a prompt
+# injection reaching this credential still can't touch anything outside
+# `aic-demo`'s Deployments.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aic-investigator
+  namespace: aic-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aic-investigator
+  namespace: aic-demo
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aic-investigator
+  namespace: aic-demo
+subjects:
+  - kind: ServiceAccount
+    name: aic-investigator
+    namespace: aic-demo
+roleRef:
+  kind: Role
+  name: aic-investigator
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aic-executor
+  namespace: aic-demo
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: aic-executor
+  namespace: aic-demo
+rules:
+  # Action catalog today is RollbackDeployment/PatchConfig against
+  # payment-service only (design doc §1.4 PLAN REMEDIATION row) — extend
+  # resourceNames here as the catalog grows, never widen past `deployments`.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["payment-service"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: aic-executor
+  namespace: aic-demo
+subjects:
+  - kind: ServiceAccount
+    name: aic-executor
+    namespace: aic-demo
+roleRef:
+  kind: Role
+  name: aic-executor
+  apiGroup: rbac.authorization.k8s.io

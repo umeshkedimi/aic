@@ -1,0 +1,13 @@
+# kind cluster for the signature scenario's toy system (design doc §1.3).
+# checkout-service is reachable at http://localhost:8080 via the NodePort
+# below, so the load generator (and a human with curl) don't need
+# `kubectl port-forward` running continuously just to send traffic.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: aic-demo
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP
