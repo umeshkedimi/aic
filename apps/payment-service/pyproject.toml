@@ -1,0 +1,28 @@
+[project]
+name = "aic-payment-service"
+version = "0.1.0"
+description = "Toy payment-service: a configurable-size Postgres connection pool that genuinely exhausts under load (design doc §1.2)."
+requires-python = ">=3.13"
+dependencies = [
+    "aic-common",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "psycopg[binary]>=3.2",
+    "psycopg-pool>=3.2",
+    "prometheus-client>=0.20",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+]
+
+[tool.uv.sources]
+aic-common = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/payment_service"]
