@@ -13,6 +13,7 @@ members = [
     "aic-database",
     "aic-domain",
     "aic-payment-service",
+    "aic-toy-ops",
 ]
 
 [manifest.dependency-groups]
@@ -138,6 +139,31 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "httpx", specifier = ">=0.27" }]
+
+[[package]]
+name = "aic-toy-ops"
+version = "0.1.0"
+source = { editable = "apps/toy-ops" }
+dependencies = [
+    { name = "aic-common" },
+    { name = "aic-database" },
+    { name = "httpx" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "testcontainers" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aic-common", editable = "packages/common" },
+    { name = "aic-database", editable = "packages/database" },
+    { name = "httpx", specifier = ">=0.27" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "testcontainers", extras = ["postgres"], specifier = ">=4.8" }]
 
 [[package]]
 name = "alembic"

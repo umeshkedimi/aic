@@ -1,0 +1,30 @@
+[project]
+name = "aic-toy-ops"
+version = "0.1.0"
+description = "Operational tooling for the toy system: the deploy script that produces the signature scenario's real bad deploy, and the load generator."
+requires-python = ">=3.13"
+dependencies = [
+    "aic-common",
+    "aic-database",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+deploy-payment-service = "aic_toy_ops.deploy_payment_service:main"
+load-generator = "aic_toy_ops.load_generator:main"
+
+[dependency-groups]
+dev = [
+    "testcontainers[postgres]>=4.8",
+]
+
+[tool.uv.sources]
+aic-common = { workspace = true }
+aic-database = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aic_toy_ops"]

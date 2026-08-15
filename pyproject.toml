@@ -29,6 +29,7 @@ mypy_path = [
     "packages/database/src",
     "apps/payment-service/src",
     "apps/checkout-service/src",
+    "apps/toy-ops/src",
 ]
 explicit_package_bases = true
 files = [
@@ -43,6 +44,8 @@ files = [
     "apps/payment-service/tests",
     "apps/checkout-service/src",
     "apps/checkout-service/tests",
+    "apps/toy-ops/src",
+    "apps/toy-ops/tests",
 ]
 
 [[tool.mypy.overrides]]
@@ -56,4 +59,5 @@ testpaths = [
     "packages/database/tests",
     "apps/payment-service/tests",
     "apps/checkout-service/tests",
+    "apps/toy-ops/tests",
 ]
