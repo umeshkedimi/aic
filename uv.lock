@@ -8,6 +8,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "aic-checkout-service",
     "aic-common",
     "aic-database",
     "aic-domain",
@@ -21,6 +22,30 @@ dev = [
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.6" },
 ]
+
+[[package]]
+name = "aic-checkout-service"
+version = "0.1.0"
+source = { editable = "apps/checkout-service" }
+dependencies = [
+    { name = "aic-common" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "prometheus-client" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aic-common", editable = "packages/common" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "prometheus-client", specifier = ">=0.20" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+]
+
+[package.metadata.requires-dev]
+dev = []
 
 [[package]]
 name = "aic-common"
