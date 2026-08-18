@@ -1,5 +1,6 @@
 .PHONY: install test lint fmt typecheck check migrate migrate-new \
-	demo-build demo-up demo-down demo-deploy-good demo-deploy-bad demo-load demo-status
+	demo-build demo-up demo-down demo-deploy-good demo-deploy-bad demo-load demo-status \
+	observability-up observability-down demo-webhook-logs demo-prometheus-alerts
 
 KIND_CLUSTER := aic-demo
 DEMO_NAMESPACE := aic-demo
@@ -52,10 +53,42 @@ demo-up: demo-build
 	kubectl apply -f infra/kind/payment-service-service.yaml
 	$(MAKE) demo-deploy-good
 	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/checkout-service --timeout=90s
-	@echo "demo is up — checkout-service: http://localhost:8080"
+	$(MAKE) observability-up
+	@echo "demo is up — checkout-service: http://localhost:8080, prometheus: http://localhost:9090, alertmanager: http://localhost:9093"
 
 demo-down:
 	kind delete cluster --name $(KIND_CLUSTER)
+
+# Observability stack (design doc §1.3/§1.4, T3): Prometheus + alert rules,
+# Alertmanager (webhook -> stub receiver until T4's real aic-ingest lands),
+# Loki + Promtail. Requires the checkout-service/payment-service Services to
+# already exist (Prometheus scrape targets), so demo-up runs this last.
+observability-up:
+	kubectl apply -f infra/kind/observability/prometheus.yaml
+	kubectl apply -f infra/kind/observability/alertmanager.yaml
+	kubectl apply -f infra/kind/observability/webhook-stub.yaml
+	kubectl apply -f infra/kind/observability/loki.yaml
+	kubectl apply -f infra/kind/observability/promtail.yaml
+	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/prometheus --timeout=90s
+	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/alertmanager --timeout=90s
+	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/alert-webhook-stub --timeout=90s
+	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/loki --timeout=90s
+
+observability-down:
+	kubectl delete -f infra/kind/observability/promtail.yaml --ignore-not-found
+	kubectl delete -f infra/kind/observability/loki.yaml --ignore-not-found
+	kubectl delete -f infra/kind/observability/webhook-stub.yaml --ignore-not-found
+	kubectl delete -f infra/kind/observability/alertmanager.yaml --ignore-not-found
+	kubectl delete -f infra/kind/observability/prometheus.yaml --ignore-not-found
+
+# Tail the stub webhook receiver to watch real Alertmanager POSTs land
+# (T3's Done criterion — no faked alert payloads).
+demo-webhook-logs:
+	kubectl -n $(DEMO_NAMESPACE) logs -f deployment/alert-webhook-stub
+
+demo-prometheus-alerts:
+	kubectl -n $(DEMO_NAMESPACE) exec deployment/prometheus -- \
+		wget -qO- http://localhost:9090/api/v1/alerts
 
 demo-deploy-good:
 	uv run --package aic-toy-ops deploy-payment-service --preset good
