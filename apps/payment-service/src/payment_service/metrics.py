@@ -42,6 +42,11 @@ class PaymentMetrics:
             "Postgres connections currently checked out from the pool",
             registry=self.registry,
         )
+        self.pool_max_size = Gauge(
+            "db_pool_max_size",
+            "Configured maximum size of the Postgres connection pool (DB_POOL_SIZE)",
+            registry=self.registry,
+        )
 
     def instrument(self, app: FastAPI) -> None:
         @app.middleware("http")

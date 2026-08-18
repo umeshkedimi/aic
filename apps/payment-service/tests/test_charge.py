@@ -85,5 +85,6 @@ def test_metrics_endpoint_exposes_pool_and_http_metrics() -> None:
 
     assert resp.status_code == 200
     assert "db_pool_connections_in_use" in resp.text
+    assert "db_pool_max_size" in resp.text
     assert "http_requests_total" in resp.text
     assert "http_request_duration_seconds" in resp.text

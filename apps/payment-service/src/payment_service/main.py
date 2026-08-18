@@ -49,6 +49,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         nonlocal pool
+        metrics.pool_max_size.set(settings.db_pool_size)
         if owns_pool:
             real_pool = AsyncConnectionPool(
                 settings.database_url,
