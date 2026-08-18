@@ -1,0 +1,85 @@
+# Alertmanager for the toy system (design doc §1.3/§1.4 DETECT, T3).
+#
+# group_by: [alertname] deliberately keeps the three alert rules in separate
+# notification groups — the design doc's DETECT row says "Each fires a
+# webhook to aic-ingest", i.e. three distinct webhook POSTs, not one grouped
+# batch. group_wait/group_interval are kept short since this is a demo
+# cluster investigating a fault that resolves in seconds/minutes, not a
+# production paging config.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: aic-demo
+data:
+  alertmanager.yml: |
+    route:
+      group_by: ["alertname"]
+      group_wait: 5s
+      group_interval: 10s
+      repeat_interval: 5m
+      receiver: aic-ingest-stub
+
+    receivers:
+      - name: aic-ingest-stub
+        webhook_configs:
+          - url: "http://alert-webhook-stub:8080/webhook"
+            send_resolved: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: aic-demo
+  labels:
+    app: alertmanager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.27.0
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+          ports:
+            - containerPort: 9093
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9093
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager/alertmanager.yml
+              subPath: alertmanager.yml
+            - name: data
+              mountPath: /alertmanager
+      volumes:
+        - name: config
+          configMap:
+            name: alertmanager-config
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: aic-demo
+spec:
+  type: NodePort
+  selector:
+    app: alertmanager
+  ports:
+    - port: 9093
+      targetPort: 9093
+      nodePort: 30093
