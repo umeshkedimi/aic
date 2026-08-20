@@ -6,6 +6,13 @@
 # batch. group_wait/group_interval are kept short since this is a demo
 # cluster investigating a fault that resolves in seconds/minutes, not a
 # production paging config.
+#
+# The webhook target is the real aic-ingest (T4), not T3's stub receiver —
+# `host.docker.internal` because aic-ingest is a host process (`make
+# demo-services-up`), reachable in-cluster the same way Docker Desktop makes
+# any host service reachable from a container; see the design note in
+# infra/kind/eventbus/redpanda.yaml for why aic-ingest/aic-correlator run
+# on the host rather than in-cluster.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -18,12 +25,12 @@ data:
       group_wait: 5s
       group_interval: 10s
       repeat_interval: 5m
-      receiver: aic-ingest-stub
+      receiver: aic-ingest
 
     receivers:
-      - name: aic-ingest-stub
+      - name: aic-ingest
         webhook_configs:
-          - url: "http://alert-webhook-stub:8080/webhook"
+          - url: "http://host.docker.internal:8090/webhooks/alertmanager"
             send_resolved: true
 ---
 apiVersion: apps/v1

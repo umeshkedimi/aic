@@ -17,6 +17,9 @@ nodes:
       - containerPort: 30093
         hostPort: 9093
         protocol: TCP
-      - containerPort: 30081
-        hostPort: 8081
+      # Redpanda (T4, design doc §1.8/ADR 0002) — aic-ingest/aic-correlator
+      # are host processes and reach the broker here; see the design note
+      # in infra/kind/eventbus/redpanda.yaml.
+      - containerPort: 30092
+        hostPort: 9092
         protocol: TCP

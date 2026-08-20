@@ -4,6 +4,7 @@ members = ["packages/*", "apps/*"]
 [dependency-groups]
 dev = [
     "pytest>=8.3",
+    "pytest-asyncio>=0.24",
     "pytest-cov>=5.0",
     "mypy>=1.11",
     "ruff>=0.6",
@@ -27,37 +28,44 @@ mypy_path = [
     "packages/common/src",
     "packages/domain/src",
     "packages/database/src",
+    "packages/contracts/src",
+    "packages/eventbus/src",
     "apps/payment-service/src",
     "apps/checkout-service/src",
     "apps/toy-ops/src",
+    "apps/aic-ingest/src",
+    "apps/aic-correlator/src",
 ]
 explicit_package_bases = true
-files = [
-    "packages/common/src",
-    "packages/common/tests",
-    "packages/domain/src",
-    "packages/domain/tests",
-    "packages/database/src",
-    "packages/database/tests",
-    "packages/database/alembic",
-    "apps/payment-service/src",
-    "apps/payment-service/tests",
-    "apps/checkout-service/src",
-    "apps/checkout-service/tests",
-    "apps/toy-ops/src",
-    "apps/toy-ops/tests",
-]
+# No `files` list here, deliberately: `apps/*` directory names are
+# hyphenated (PyPI-style: `aic-ingest`, `toy-ops`, ...), which mypy can't
+# fold into a dotted namespace-package path, so any single invocation that
+# includes more than one hyphenated app's `tests/conftest.py` hits a false
+# "Duplicate module named conftest" — every such `conftest.py` resolves to
+# the same bare module name. `packages/*` directories aren't hyphenated, so
+# they don't have this problem and can be checked together in one pass. See
+# `make typecheck`, which runs one invocation for `packages/*` and one more
+# per hyphenated `apps/*` directory rather than a single combined pass.
 
 [[tool.mypy.overrides]]
 module = "alembic.*"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "aiokafka.*"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 testpaths = [
     "packages/common/tests",
     "packages/domain/tests",
     "packages/database/tests",
+    "packages/contracts/tests",
+    "packages/eventbus/tests",
     "apps/payment-service/tests",
     "apps/checkout-service/tests",
     "apps/toy-ops/tests",
+    "apps/aic-ingest/tests",
+    "apps/aic-correlator/tests",
 ]

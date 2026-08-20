@@ -1,0 +1,74 @@
+# Redpanda: single-node, Kafka-API-compatible broker for the `alert-events`
+# topic (design doc §1.8, ADR 0002). Chosen over stock Apache Kafka for the
+# same "less operational overhead" reasoning as T3's in-cluster
+# observability stack — one binary, no ZooKeeper/JVM — while still speaking
+# the real Kafka wire protocol `aiokafka` (aic-ingest/aic-correlator) talks.
+#
+# aic-ingest and aic-correlator run as HOST processes (`make demo-services-up`),
+# the same pattern `apps/toy-ops`'s deploy/load-generator scripts already
+# use: real processes that reach into the cluster through NodePorts and
+# reach AIC's own system-of-record Postgres directly at `localhost` (see
+# .env.example) — there's no in-cluster Postgres to reach that DB through,
+# so putting aic-ingest/aic-correlator in-cluster would just trade one
+# cross-boundary hop (a host client reaching this broker) for a worse one
+# (an in-cluster pod reaching a host-only Postgres). Concretely, that means
+# the ONLY client that will ever talk to this broker is a host-side
+# aiokafka client — so it's advertised as `localhost:9092` (the
+# `kind-config.yaml` hostPort below), the address a host client can
+# actually reconnect to after its first metadata fetch, not the in-cluster
+# Service DNS name a host client could never resolve.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redpanda
+  namespace: aic-demo
+  labels:
+    app: redpanda
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda
+  template:
+    metadata:
+      labels:
+        app: redpanda
+    spec:
+      containers:
+        - name: redpanda
+          image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+          command:
+            - rpk
+            - redpanda
+            - start
+            - --mode=dev-container
+            - --node-id=0
+            - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+            - --advertise-kafka-addr=PLAINTEXT://localhost:9092
+          ports:
+            - containerPort: 9092
+          readinessProbe:
+            exec:
+              command: ["rpk", "cluster", "info", "--brokers", "localhost:9092"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/redpanda/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+  namespace: aic-demo
+spec:
+  type: NodePort
+  selector:
+    app: redpanda
+  ports:
+    - port: 9092
+      targetPort: 9092
+      nodePort: 30092

@@ -1,9 +1,12 @@
 .PHONY: install test lint fmt typecheck check migrate migrate-new \
 	demo-build demo-up demo-down demo-deploy-good demo-deploy-bad demo-load demo-status \
-	observability-up observability-down demo-webhook-logs demo-prometheus-alerts
+	observability-up observability-down demo-prometheus-alerts \
+	eventbus-up eventbus-down demo-seed demo-services-up demo-services-down \
+	demo-ingest-logs demo-correlator-logs
 
 KIND_CLUSTER := aic-demo
 DEMO_NAMESPACE := aic-demo
+DEMO_RUN_DIR := /tmp/aic-demo
 
 install:
 	uv sync
@@ -18,8 +21,18 @@ fmt:
 	uv run ruff format .
 	uv run ruff check --fix .
 
+# One combined pass for packages/* (unhyphenated dir names — safe to check
+# together), then one pass per hyphenated apps/* dir — see the comment on
+# [tool.mypy] in pyproject.toml for why they can't be combined.
 typecheck:
-	uv run mypy
+	uv run mypy packages/common/src packages/common/tests \
+		packages/domain/src packages/domain/tests \
+		packages/database/src packages/database/tests packages/database/alembic \
+		packages/contracts/src packages/contracts/tests \
+		packages/eventbus/src packages/eventbus/tests
+	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator; do \
+		uv run mypy apps/$$app/src apps/$$app/tests || exit 1; \
+	done
 
 check: lint typecheck test
 
@@ -54,41 +67,73 @@ demo-up: demo-build
 	$(MAKE) demo-deploy-good
 	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/checkout-service --timeout=90s
 	$(MAKE) observability-up
-	@echo "demo is up — checkout-service: http://localhost:8080, prometheus: http://localhost:9090, alertmanager: http://localhost:9093"
+	$(MAKE) eventbus-up
+	$(MAKE) demo-seed
+	$(MAKE) demo-services-up
+	@echo "demo is up — checkout-service: http://localhost:8080, prometheus: http://localhost:9090, alertmanager: http://localhost:9093, aic-ingest: http://localhost:8090"
 
-demo-down:
+demo-down: demo-services-down
 	kind delete cluster --name $(KIND_CLUSTER)
 
 # Observability stack (design doc §1.3/§1.4, T3): Prometheus + alert rules,
-# Alertmanager (webhook -> stub receiver until T4's real aic-ingest lands),
-# Loki + Promtail. Requires the checkout-service/payment-service Services to
-# already exist (Prometheus scrape targets), so demo-up runs this last.
+# Alertmanager (webhook -> the real aic-ingest, T4), Loki + Promtail.
+# Requires the checkout-service/payment-service Services to already exist
+# (Prometheus scrape targets), so demo-up runs this before eventbus-up.
 observability-up:
 	kubectl apply -f infra/kind/observability/prometheus.yaml
 	kubectl apply -f infra/kind/observability/alertmanager.yaml
-	kubectl apply -f infra/kind/observability/webhook-stub.yaml
 	kubectl apply -f infra/kind/observability/loki.yaml
 	kubectl apply -f infra/kind/observability/promtail.yaml
 	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/prometheus --timeout=90s
 	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/alertmanager --timeout=90s
-	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/alert-webhook-stub --timeout=90s
 	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/loki --timeout=90s
 
 observability-down:
 	kubectl delete -f infra/kind/observability/promtail.yaml --ignore-not-found
 	kubectl delete -f infra/kind/observability/loki.yaml --ignore-not-found
-	kubectl delete -f infra/kind/observability/webhook-stub.yaml --ignore-not-found
 	kubectl delete -f infra/kind/observability/alertmanager.yaml --ignore-not-found
 	kubectl delete -f infra/kind/observability/prometheus.yaml --ignore-not-found
-
-# Tail the stub webhook receiver to watch real Alertmanager POSTs land
-# (T3's Done criterion — no faked alert payloads).
-demo-webhook-logs:
-	kubectl -n $(DEMO_NAMESPACE) logs -f deployment/alert-webhook-stub
 
 demo-prometheus-alerts:
 	kubectl -n $(DEMO_NAMESPACE) exec deployment/prometheus -- \
 		wget -qO- http://localhost:9090/api/v1/alerts
+
+# Kafka-compatible event bus (design doc §1.8, ADR 0002, T4). See the design
+# note in infra/kind/eventbus/redpanda.yaml for why aic-ingest/aic-correlator
+# reach it as host processes rather than in-cluster pods.
+eventbus-up:
+	kubectl apply -f infra/kind/eventbus/redpanda.yaml
+	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/redpanda --timeout=90s
+
+eventbus-down:
+	kubectl delete -f infra/kind/eventbus/redpanda.yaml --ignore-not-found
+
+# Idempotent — safe to rerun against an already-seeded cluster.
+demo-seed:
+	uv run --package aic-toy-ops seed-service-dependencies
+
+# aic-ingest/aic-correlator (T4) run as background host processes, like
+# apps/toy-ops's deploy/load-generator scripts — see the design note in
+# infra/kind/eventbus/redpanda.yaml.
+demo-services-up:
+	mkdir -p $(DEMO_RUN_DIR)
+	uv run --package aic-ingest aic-ingest > $(DEMO_RUN_DIR)/aic-ingest.log 2>&1 & \
+		echo $$! > $(DEMO_RUN_DIR)/aic-ingest.pid
+	uv run --package aic-correlator aic-correlator > $(DEMO_RUN_DIR)/aic-correlator.log 2>&1 & \
+		echo $$! > $(DEMO_RUN_DIR)/aic-correlator.pid
+	@echo "aic-ingest and aic-correlator started — logs: $(DEMO_RUN_DIR)/*.log"
+
+demo-services-down:
+	-[ -f $(DEMO_RUN_DIR)/aic-ingest.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-ingest.pid) 2>/dev/null; \
+		rm -f $(DEMO_RUN_DIR)/aic-ingest.pid
+	-[ -f $(DEMO_RUN_DIR)/aic-correlator.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-correlator.pid) 2>/dev/null; \
+		rm -f $(DEMO_RUN_DIR)/aic-correlator.pid
+
+demo-ingest-logs:
+	tail -f $(DEMO_RUN_DIR)/aic-ingest.log
+
+demo-correlator-logs:
+	tail -f $(DEMO_RUN_DIR)/aic-correlator.log
 
 demo-deploy-good:
 	uv run --package aic-toy-ops deploy-payment-service --preset good
