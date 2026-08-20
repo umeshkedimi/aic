@@ -12,6 +12,7 @@ dependencies = [
 [project.scripts]
 deploy-payment-service = "aic_toy_ops.deploy_payment_service:main"
 load-generator = "aic_toy_ops.load_generator:main"
+seed-service-dependencies = "aic_toy_ops.seed_service_dependencies:main"
 
 [dependency-groups]
 dev = [
