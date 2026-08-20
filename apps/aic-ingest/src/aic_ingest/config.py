@@ -17,6 +17,6 @@ from pydantic_settings import SettingsConfigDict
 class IngestSettings(AICBaseSettings):
     model_config = SettingsConfigDict(env_prefix="AIC_INGEST_")
 
-    kafka_bootstrap_servers: str = "localhost:30092"
+    kafka_bootstrap_servers: str = "localhost:9092"
     topic: str = ALERT_EVENTS_TOPIC
     port: int = 8090

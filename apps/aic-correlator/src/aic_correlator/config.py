@@ -17,6 +17,6 @@ from pydantic_settings import SettingsConfigDict
 class CorrelatorSettings(AICBaseSettings):
     model_config = SettingsConfigDict(env_prefix="AIC_CORRELATOR_")
 
-    kafka_bootstrap_servers: str = "localhost:30092"
+    kafka_bootstrap_servers: str = "localhost:9092"
     topic: str = ALERT_EVENTS_TOPIC
     group_id: str = "aic-correlator"
