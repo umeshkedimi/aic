@@ -29,7 +29,8 @@ typecheck:
 		packages/domain/src packages/domain/tests \
 		packages/database/src packages/database/tests packages/database/alembic \
 		packages/contracts/src packages/contracts/tests \
-		packages/eventbus/src packages/eventbus/tests
+		packages/eventbus/src packages/eventbus/tests \
+		packages/agents/src packages/agents/tests
 	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator; do \
 		uv run mypy apps/$$app/src apps/$$app/tests || exit 1; \
 	done
