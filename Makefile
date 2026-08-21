@@ -2,11 +2,12 @@
 	demo-build demo-up demo-down demo-deploy-good demo-deploy-bad demo-load demo-status \
 	observability-up observability-down demo-prometheus-alerts \
 	eventbus-up eventbus-down demo-seed demo-services-up demo-services-down \
-	demo-ingest-logs demo-correlator-logs
+	demo-ingest-logs demo-correlator-logs llm-up llm-down
 
 KIND_CLUSTER := aic-demo
 DEMO_NAMESPACE := aic-demo
 DEMO_RUN_DIR := /tmp/aic-demo
+LITELLM_CONTAINER := aic-litellm
 
 install:
 	uv sync
@@ -69,11 +70,12 @@ demo-up: demo-build
 	kubectl -n $(DEMO_NAMESPACE) rollout status deployment/checkout-service --timeout=90s
 	$(MAKE) observability-up
 	$(MAKE) eventbus-up
+	$(MAKE) llm-up
 	$(MAKE) demo-seed
 	$(MAKE) demo-services-up
-	@echo "demo is up — checkout-service: http://localhost:8080, prometheus: http://localhost:9090, alertmanager: http://localhost:9093, aic-ingest: http://localhost:8090"
+	@echo "demo is up — checkout-service: http://localhost:8080, prometheus: http://localhost:9090, alertmanager: http://localhost:9093, aic-ingest: http://localhost:8090, litellm: http://localhost:4000"
 
-demo-down: demo-services-down
+demo-down: demo-services-down llm-down
 	kind delete cluster --name $(KIND_CLUSTER)
 
 # Observability stack (design doc §1.3/§1.4, T3): Prometheus + alert rules,
@@ -108,6 +110,22 @@ eventbus-up:
 
 eventbus-down:
 	kubectl delete -f infra/kind/eventbus/redpanda.yaml --ignore-not-found
+
+# LiteLLM proxy (T5, ADR 0004). A plain host-reachable Docker container,
+# not a kind-cluster service — see the design note in
+# infra/litellm/litellm_config.yaml. Requires ANTHROPIC_API_KEY and
+# LITELLM_MASTER_KEY in .env (see .env.example).
+llm-up:
+	docker rm -f $(LITELLM_CONTAINER) >/dev/null 2>&1 || true
+	docker run -d --name $(LITELLM_CONTAINER) \
+		--env-file .env \
+		-p 4000:4000 \
+		-v $(PWD)/infra/litellm/litellm_config.yaml:/app/config.yaml \
+		ghcr.io/berriai/litellm:main-stable \
+		--config /app/config.yaml --port 4000
+
+llm-down:
+	docker rm -f $(LITELLM_CONTAINER) >/dev/null 2>&1 || true
 
 # Idempotent — safe to rerun against an already-seeded cluster.
 demo-seed:

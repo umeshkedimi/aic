@@ -1,0 +1,25 @@
+# LiteLLM proxy config (T5, ADR 0004). Runs as a plain host-reachable
+# Docker container (`make llm-up`), not a kind-cluster service — only host
+# processes (investigation graph, triage, scribe: same "host process"
+# pattern as apps/aic-ingest and apps/aic-correlator, T4) ever call it, so
+# there's no reason to pay for an in-cluster hop.
+#
+# Per-agent-role model routing (design doc §1.4: cheap tier for
+# digest/title/assess/scribe, frontier tier for synthesize) is expressed
+# entirely here, as the model_name a caller asks for
+# (aic_agents.port.ModelTier's values) — never as a real provider model id
+# in application code. Swapping either tier's underlying model/provider is
+# a one-line change in this file.
+model_list:
+  - model_name: aic-cheap
+    litellm_params:
+      model: anthropic/claude-haiku-4-5-20251001
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: aic-frontier
+    litellm_params:
+      model: anthropic/claude-sonnet-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
