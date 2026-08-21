@@ -85,3 +85,15 @@ class ApprovalDecisionType(StrEnum):
 
     APPROVE = "approve"
     REJECT = "reject"
+
+
+class LLMCallStatus(StrEnum):
+    """Outcome of a single LLM completion attempt (design doc ADR 0004,
+    §1.14 "Malformed/hallucinated LLM output": retry-with-feedback, max 2
+    attempts). Mirrors `EvidenceStatus` (ok/error) plus the one outcome
+    unique to structured-output calls: the response came back but failed
+    schema validation."""
+
+    OK = "ok"
+    VALIDATION_FAILED = "validation_failed"
+    ERROR = "error"

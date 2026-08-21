@@ -23,6 +23,7 @@ from aic_domain.enums import (
     ApprovalDecisionType,
     EvidenceStatus,
     IncidentStatus,
+    LLMCallStatus,
     PolicyEffect,
     Severity,
 )
@@ -251,6 +252,50 @@ class Postmortem(Base):
     content: Mapped[str] = mapped_column(sa.Text)
     embedding_refs: Mapped[list[str]] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(server_default=sa.func.now())
+
+
+class LLMCall(Base):
+    """Cost/token ledger (T5, ADR 0004). One row per LLM completion
+    *attempt* — a retry-with-feedback round trip writes two rows sharing
+    the same `incident_id`/`agent_role`, `attempt` distinguishing them.
+    `prompt_hash` (not the raw prompt) follows the same pattern as
+    `RCA.prompt_hash`. `cost_usd` comes from LiteLLM's own per-call cost
+    header when the proxy provides it (ADR 0004: "reconcile, don't trust
+    either blindly") rather than a cost table AIC maintains itself, so it's
+    nullable — absent whenever the proxy doesn't report it."""
+
+    __tablename__ = "llm_call"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    incident_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("incident.id"), index=True, default=None
+    )
+    agent_role: Mapped[str] = mapped_column(sa.String)
+    tier: Mapped[str] = mapped_column(sa.String)
+    model: Mapped[str | None] = mapped_column(sa.String, default=None)
+    prompt_hash: Mapped[str] = mapped_column(sa.String)
+    attempt: Mapped[int] = mapped_column(sa.Integer, default=1)
+    input_tokens: Mapped[int | None] = mapped_column(sa.Integer, default=None)
+    output_tokens: Mapped[int | None] = mapped_column(sa.Integer, default=None)
+    cost_usd: Mapped[float | None] = mapped_column(sa.Float, default=None)
+    latency_ms: Mapped[int | None] = mapped_column(sa.Integer, default=None)
+    status: Mapped[LLMCallStatus] = mapped_column(sa.Enum(LLMCallStatus, name="llm_call_status"))
+    error: Mapped[str | None] = mapped_column(sa.Text, default=None)
+    created_at: Mapped[datetime] = mapped_column(server_default=sa.func.now())
+
+    __table_args__ = (
+        sa.CheckConstraint("attempt >= 1", name="attempt_at_least_one"),
+        sa.CheckConstraint(
+            "input_tokens IS NULL OR input_tokens >= 0", name="input_tokens_non_negative"
+        ),
+        sa.CheckConstraint(
+            "output_tokens IS NULL OR output_tokens >= 0", name="output_tokens_non_negative"
+        ),
+        sa.CheckConstraint("cost_usd IS NULL OR cost_usd >= 0", name="cost_usd_non_negative"),
+        sa.CheckConstraint(
+            "latency_ms IS NULL OR latency_ms >= 0", name="llm_call_latency_ms_non_negative"
+        ),
+    )
 
 
 class ServiceDependency(Base):
