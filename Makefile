@@ -2,7 +2,7 @@
 	demo-build demo-up demo-down demo-deploy-good demo-deploy-bad demo-load demo-status \
 	observability-up observability-down demo-prometheus-alerts \
 	eventbus-up eventbus-down demo-seed demo-services-up demo-services-down \
-	demo-ingest-logs demo-correlator-logs llm-up llm-down
+	demo-ingest-logs demo-correlator-logs demo-triage-logs llm-up llm-down
 
 KIND_CLUSTER := aic-demo
 DEMO_NAMESPACE := aic-demo
@@ -32,7 +32,7 @@ typecheck:
 		packages/contracts/src packages/contracts/tests \
 		packages/eventbus/src packages/eventbus/tests \
 		packages/agents/src packages/agents/tests
-	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator; do \
+	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator aic-triage; do \
 		uv run mypy apps/$$app/src apps/$$app/tests || exit 1; \
 	done
 
@@ -131,28 +131,36 @@ llm-down:
 demo-seed:
 	uv run --package aic-toy-ops seed-service-dependencies
 
-# aic-ingest/aic-correlator (T4) run as background host processes, like
-# apps/toy-ops's deploy/load-generator scripts — see the design note in
-# infra/kind/eventbus/redpanda.yaml.
+# aic-ingest/aic-correlator/aic-triage (T4, T6) run as background host
+# processes, like apps/toy-ops's deploy/load-generator scripts — see the
+# design note in infra/kind/eventbus/redpanda.yaml. aic-triage additionally
+# requires the litellm proxy (make llm-up) to be reachable.
 demo-services-up:
 	mkdir -p $(DEMO_RUN_DIR)
 	uv run --package aic-ingest aic-ingest > $(DEMO_RUN_DIR)/aic-ingest.log 2>&1 & \
 		echo $$! > $(DEMO_RUN_DIR)/aic-ingest.pid
 	uv run --package aic-correlator aic-correlator > $(DEMO_RUN_DIR)/aic-correlator.log 2>&1 & \
 		echo $$! > $(DEMO_RUN_DIR)/aic-correlator.pid
-	@echo "aic-ingest and aic-correlator started — logs: $(DEMO_RUN_DIR)/*.log"
+	uv run --package aic-triage aic-triage > $(DEMO_RUN_DIR)/aic-triage.log 2>&1 & \
+		echo $$! > $(DEMO_RUN_DIR)/aic-triage.pid
+	@echo "aic-ingest, aic-correlator, and aic-triage started — logs: $(DEMO_RUN_DIR)/*.log"
 
 demo-services-down:
 	-[ -f $(DEMO_RUN_DIR)/aic-ingest.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-ingest.pid) 2>/dev/null; \
 		rm -f $(DEMO_RUN_DIR)/aic-ingest.pid
 	-[ -f $(DEMO_RUN_DIR)/aic-correlator.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-correlator.pid) 2>/dev/null; \
 		rm -f $(DEMO_RUN_DIR)/aic-correlator.pid
+	-[ -f $(DEMO_RUN_DIR)/aic-triage.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-triage.pid) 2>/dev/null; \
+		rm -f $(DEMO_RUN_DIR)/aic-triage.pid
 
 demo-ingest-logs:
 	tail -f $(DEMO_RUN_DIR)/aic-ingest.log
 
 demo-correlator-logs:
 	tail -f $(DEMO_RUN_DIR)/aic-correlator.log
+
+demo-triage-logs:
+	tail -f $(DEMO_RUN_DIR)/aic-triage.log
 
 demo-deploy-good:
 	uv run --package aic-toy-ops deploy-payment-service --preset good
