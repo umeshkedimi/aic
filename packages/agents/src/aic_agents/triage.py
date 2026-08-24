@@ -56,9 +56,7 @@ async def triage_incident(
     next_status = transition(incident.status, IncidentTransitionEvent.TRIAGE_COMPLETED)
 
     signals = list(
-        session.execute(
-            select(IncidentSignal).where(IncidentSignal.incident_id == incident_id)
-        )
+        session.execute(select(IncidentSignal).where(IncidentSignal.incident_id == incident_id))
         .scalars()
         .all()
     )
