@@ -9,6 +9,8 @@ dependencies = [
     "aic-database",
     "pydantic>=2.9",
     "openai>=1.40",
+    "langgraph>=1.2.11",
+    "httpx>=0.28.1",
 ]
 
 [dependency-groups]
