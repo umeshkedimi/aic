@@ -189,11 +189,17 @@ def _fake_tools(*, deployment_data: list[dict[str, Any]] | None = None) -> dict[
     }
 
 
-def _seed_incident(session_factory: sessionmaker[Session], *, starts_at: datetime = T0) -> UUID:
+def _seed_incident(
+    session_factory: sessionmaker[Session],
+    *,
+    starts_at: datetime = T0,
+    incident_service: str = "payment-service",
+    signal_service: str = "payment-service",
+) -> UUID:
     with session_factory() as session:
         incident = IncidentRow(
-            fingerprint=f"payment-service:{uuid4()}",
-            service="payment-service",
+            fingerprint=f"{incident_service}:{uuid4()}",
+            service=incident_service,
             environment=Environment.LOCAL,
             status=IncidentStatus.INVESTIGATING,
             created_at=starts_at,
@@ -205,7 +211,7 @@ def _seed_incident(session_factory: sessionmaker[Session], *, starts_at: datetim
                 incident_id=incident.id,
                 alert_fingerprint=f"fp-{uuid4()}",
                 alertname="DBPoolExhaustionPaymentService",
-                service="payment-service",
+                service=signal_service,
                 labels={},
                 starts_at=starts_at,
             )
@@ -660,3 +666,46 @@ async def test_run_investigation_produces_an_rca_result_citing_real_evidence(
         )
         rca_row = session.get(RCARow, result.rca_id)
         assert rca_row is not None
+
+
+async def test_run_investigation_scopes_queries_to_the_signal_service_not_the_group_key(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A live run against the real T2/T3/T4 pipeline surfaced this:
+    `Incident.service` is the correlation *group's* canonical key (§1.4's
+    dependency-graph rule picks the alphabetically-first connected
+    service, e.g. "checkout-service"), not necessarily where the symptom —
+    or the deploy that caused it — actually lives. The signals' own
+    `service` ("payment-service") is the real origin and must be what
+    `plan`'s fixed lines of inquiry query against."""
+    incident_id = _seed_incident(
+        session_factory, incident_service="checkout-service", signal_service="payment-service"
+    )
+    requested_services: list[str] = []
+    tools = _fake_tools()
+
+    async def _capture(input_data: DeploymentHistoryInput) -> Any:
+        requested_services.append(input_data.service)
+        return []
+
+    tools["k8s.get_deployment_history"] = ToolSpec(
+        name="k8s.get_deployment_history",
+        source="postgres",
+        input_model=DeploymentHistoryInput,
+        timeout_seconds=5.0,
+        rate_limit_key="t",
+        rate_limit_max_concurrency=8,
+        call=_capture,
+        render_query=lambda i: i.service,
+    )
+    llm = _ScriptedLLM(assess_sufficient=True)
+
+    await run_investigation(
+        session_factory=session_factory,
+        incident_id=incident_id,
+        tools=tools,
+        llm=llm,
+        clock=FixedClock(T0 + timedelta(minutes=10)),
+    )
+
+    assert requested_services == ["payment-service"]

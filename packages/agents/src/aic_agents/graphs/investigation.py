@@ -133,15 +133,31 @@ def plan(*, service: str, window_start: datetime, window_end: datetime) -> list[
     """Fixed lines of inquiry for this scenario (§1.4: "not LLM-chosen").
     `window_start` is symptom onset; the 1h-prior baseline is `window_start
     - 1h` to `window_start`.
+
+    PromQL/LogQL below filter on `app="..."`, not `service="..."` — a live
+    run against the real T2/T3 stack caught this: Prometheus's scrape
+    config and Promtail's relabeling both attach `app` (from the pod's
+    `app` label), matching the design doc's own alert rules
+    (`infra/kind/observability/prometheus.yaml`), not `service`. `service`
+    is this codebase's own domain-model field name (`Incident.service`,
+    `IncidentSignal.service`) for the same concept, but it was never the
+    actual Prometheus/Loki label.
+
+    The log query also matches `warning`, not just `error` (§1.4 says
+    "filtered to level=error"): the same live run showed payment-service's
+    actual `pool_exhausted` log line — the single most decisive piece of
+    evidence for this scenario — is emitted at `level=warning`
+    (`apps/payment-service`'s own logging choice, not something to
+    second-guess here), so an `error`-only filter would silently miss it.
     """
     baseline_start = window_start - timedelta(hours=1)
     baseline_end = window_start
     p99_query = (
         "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket"
-        f'{{service="{service}"}}[1m])) by (le))'
+        f'{{app="{service}"}}[1m])) by (le))'
     )
-    pool_query = f'db_pool_connections_in_use{{service="{service}"}}'
-    log_query = f'{{service="{service}"}} |= "error"'
+    pool_query = f'db_pool_connections_in_use{{app="{service}"}}'
+    log_query = f'{{app="{service}"}} |~ `"level": "(error|warning)"`'
 
     return [
         LineOfInquiry(
@@ -162,7 +178,7 @@ def plan(*, service: str, window_start: datetime, window_end: datetime) -> list[
         LineOfInquiry(
             tool="loki.query_range",
             params={"query": log_query, "start": window_start, "end": window_end},
-            rationale="error-level logs during the incident window",
+            rationale="error/warning-level logs during the incident window",
         ),
         LineOfInquiry(
             tool="k8s.get_deployment_history",
@@ -616,7 +632,7 @@ async def run_investigation(
     and returns the final `RCAResult`. Called directly by tests and by
     `apps/aic-investigator`'s poller against the real stack."""
 
-    def _load() -> tuple[Incident, list[datetime]]:
+    def _load() -> tuple[Incident, list[IncidentSignalRow]]:
         with session_factory() as session:
             incident_row = session.get(IncidentRow, incident_id)
             if incident_row is None:
@@ -640,13 +656,29 @@ async def run_investigation(
                 created_at=incident_row.created_at,
                 resolved_at=incident_row.resolved_at,
             )
-            return incident, [s.starts_at for s in signal_rows]
+            return incident, list(signal_rows)
 
-    incident, starts_at_values = await asyncio.to_thread(_load)
-    if not starts_at_values:
+    incident, signal_rows = await asyncio.to_thread(_load)
+    if not signal_rows:
         raise ValueError(f"incident {incident_id} has no signals to investigate")
 
-    symptom_onset_at = min(starts_at_values)
+    # `Incident.service` is the *correlation group's* canonical key (§1.4's
+    # dependency-graph grouping rule — the alphabetically-first member of
+    # the connected services, e.g. "checkout-service" for a
+    # checkout-service/payment-service pair), which is not necessarily
+    # where the actual symptom (or the deploy that caused it) lives. The
+    # signals' own `service` field is the real origin — a live run against
+    # T2/T3's fault surfaced this: the incident's canonical service was
+    # "checkout-service" while every signal, and the real bad deploy, were
+    # "payment-service". For this scenario (one affected service per
+    # incident) we scope the fixed lines of inquiry to that; a future
+    # multi-service incident would need `plan`/`gather` to fan out per
+    # distinct signal service, which is out of scope for the signature
+    # scenario.
+    signal_services = {s.service for s in signal_rows}
+    target_service = next(iter(signal_services)) if len(signal_services) == 1 else incident.service
+
+    symptom_onset_at = min(s.starts_at for s in signal_rows)
     window_end = clock.now()
     if window_end <= symptom_onset_at:
         window_end = symptom_onset_at + timedelta(minutes=1)
@@ -654,7 +686,7 @@ async def run_investigation(
     compiled = build_graph(tools=tools, llm=llm, session_factory=session_factory, clock=clock)
     initial_state: GraphState = {
         "incident_id": incident_id,
-        "service": incident.service,
+        "service": target_service,
         "window_start": symptom_onset_at,
         "window_end": window_end,
         "symptom_onset_at": symptom_onset_at,
