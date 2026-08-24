@@ -92,8 +92,14 @@ metadata:
   name: loki
   namespace: aic-demo
 spec:
+  # NodePort (not ClusterIP), matching Prometheus/Alertmanager (T3): T7's
+  # investigation graph runs loki.query_range as a host process, like
+  # aic-ingest/aic-correlator/aic-triage, and needs to reach Loki without a
+  # standing `kubectl port-forward` — see infra/kind/kind-config.yaml.
+  type: NodePort
   selector:
     app: loki
   ports:
     - port: 3100
       targetPort: 3100
+      nodePort: 30100

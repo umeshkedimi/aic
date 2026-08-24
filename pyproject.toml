@@ -37,6 +37,7 @@ mypy_path = [
     "apps/aic-ingest/src",
     "apps/aic-correlator/src",
     "apps/aic-triage/src",
+    "apps/aic-investigator/src",
 ]
 explicit_package_bases = true
 # No `files` list here, deliberately: `apps/*` directory names are
@@ -72,4 +73,5 @@ testpaths = [
     "apps/aic-ingest/tests",
     "apps/aic-correlator/tests",
     "apps/aic-triage/tests",
+    "apps/aic-investigator/tests",
 ]

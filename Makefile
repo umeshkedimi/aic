@@ -2,7 +2,7 @@
 	demo-build demo-up demo-down demo-deploy-good demo-deploy-bad demo-load demo-status \
 	observability-up observability-down demo-prometheus-alerts \
 	eventbus-up eventbus-down demo-seed demo-services-up demo-services-down \
-	demo-ingest-logs demo-correlator-logs demo-triage-logs llm-up llm-down
+	demo-ingest-logs demo-correlator-logs demo-triage-logs demo-investigator-logs llm-up llm-down
 
 KIND_CLUSTER := aic-demo
 DEMO_NAMESPACE := aic-demo
@@ -32,7 +32,7 @@ typecheck:
 		packages/contracts/src packages/contracts/tests \
 		packages/eventbus/src packages/eventbus/tests \
 		packages/agents/src packages/agents/tests
-	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator aic-triage; do \
+	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator aic-triage aic-investigator; do \
 		uv run mypy apps/$$app/src apps/$$app/tests || exit 1; \
 	done
 
@@ -131,10 +131,13 @@ llm-down:
 demo-seed:
 	uv run --package aic-toy-ops seed-service-dependencies
 
-# aic-ingest/aic-correlator/aic-triage (T4, T6) run as background host
-# processes, like apps/toy-ops's deploy/load-generator scripts — see the
-# design note in infra/kind/eventbus/redpanda.yaml. aic-triage additionally
-# requires the litellm proxy (make llm-up) to be reachable.
+# aic-ingest/aic-correlator/aic-triage/aic-investigator (T4, T6, T7) run as
+# background host processes, like apps/toy-ops's deploy/load-generator
+# scripts — see the design note in infra/kind/eventbus/redpanda.yaml.
+# aic-triage/aic-investigator additionally require the litellm proxy (make
+# llm-up) to be reachable; aic-investigator also mints its own read-only
+# aic-investigator ServiceAccount token from the current kubeconfig at
+# startup (infra/kind/rbac.yaml, T2) — the demo cluster must already exist.
 demo-services-up:
 	mkdir -p $(DEMO_RUN_DIR)
 	uv run --package aic-ingest aic-ingest > $(DEMO_RUN_DIR)/aic-ingest.log 2>&1 & \
@@ -143,7 +146,9 @@ demo-services-up:
 		echo $$! > $(DEMO_RUN_DIR)/aic-correlator.pid
 	uv run --package aic-triage aic-triage > $(DEMO_RUN_DIR)/aic-triage.log 2>&1 & \
 		echo $$! > $(DEMO_RUN_DIR)/aic-triage.pid
-	@echo "aic-ingest, aic-correlator, and aic-triage started — logs: $(DEMO_RUN_DIR)/*.log"
+	uv run --package aic-investigator aic-investigator > $(DEMO_RUN_DIR)/aic-investigator.log 2>&1 & \
+		echo $$! > $(DEMO_RUN_DIR)/aic-investigator.pid
+	@echo "aic-ingest, aic-correlator, aic-triage, and aic-investigator started — logs: $(DEMO_RUN_DIR)/*.log"
 
 demo-services-down:
 	-[ -f $(DEMO_RUN_DIR)/aic-ingest.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-ingest.pid) 2>/dev/null; \
@@ -152,6 +157,8 @@ demo-services-down:
 		rm -f $(DEMO_RUN_DIR)/aic-correlator.pid
 	-[ -f $(DEMO_RUN_DIR)/aic-triage.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-triage.pid) 2>/dev/null; \
 		rm -f $(DEMO_RUN_DIR)/aic-triage.pid
+	-[ -f $(DEMO_RUN_DIR)/aic-investigator.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-investigator.pid) 2>/dev/null; \
+		rm -f $(DEMO_RUN_DIR)/aic-investigator.pid
 
 demo-ingest-logs:
 	tail -f $(DEMO_RUN_DIR)/aic-ingest.log
@@ -161,6 +168,9 @@ demo-correlator-logs:
 
 demo-triage-logs:
 	tail -f $(DEMO_RUN_DIR)/aic-triage.log
+
+demo-investigator-logs:
+	tail -f $(DEMO_RUN_DIR)/aic-investigator.log
 
 demo-deploy-good:
 	uv run --package aic-toy-ops deploy-payment-service --preset good

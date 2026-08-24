@@ -23,3 +23,9 @@ nodes:
       - containerPort: 30092
         hostPort: 9092
         protocol: TCP
+      # Loki (T3/T7) — aic-investigator is a host process and reaches Loki
+      # here for real loki.query_range calls; see infra/kind/observability/
+      # loki.yaml.
+      - containerPort: 30100
+        hostPort: 3100
+        protocol: TCP
