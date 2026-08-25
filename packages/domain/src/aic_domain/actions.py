@@ -23,13 +23,27 @@ class RollbackDeploymentParams(BaseModel):
     to_version: str
 
 
+class ConfigChange(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    key: str
+    from_value: str
+    to_value: str
+
+
 class PatchConfigParams(BaseModel):
+    """A single `PatchConfig` action patches every changed key in one
+    kubectl call, so all reverted keys live in one candidate's `changes`
+    list — never one candidate per key. That keeps the remediation choice
+    a true "rollback vs. patch" binary (design doc §1.4's own framing) even
+    when a bad deploy touched more than one config key, instead of forcing
+    an LLM call to disambiguate between several same-typed candidates that
+    a single `action_type` field can't distinguish."""
+
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     deployment: str
-    config_key: str
-    from_value: str
-    to_value: str
+    changes: list[ConfigChange] = Field(min_length=1)
 
 
 class ActionCandidate(BaseModel):
