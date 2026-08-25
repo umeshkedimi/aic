@@ -97,3 +97,41 @@ class LLMCallStatus(StrEnum):
     OK = "ok"
     VALIDATION_FAILED = "validation_failed"
     ERROR = "error"
+
+
+class ActionType(StrEnum):
+    """Closed remediation action catalog (design doc §1.4 PLAN REMEDIATION
+    row, §1.10). Values match the design doc's own literal action-type
+    names, since they appear verbatim in `Action.action_type` and in the
+    policy rule table's worked example."""
+
+    ROLLBACK_DEPLOYMENT = "RollbackDeployment"
+    PATCH_CONFIG = "PatchConfig"
+
+
+class BlastRadius(StrEnum):
+    """Policy predicate input (design doc §1.10:
+    `action_type x environment x blast-radius predicate -> effect`). The
+    action catalog only ever targets one Deployment at a time today, so
+    `SINGLE_SERVICE` is the only value any candidate actually produces;
+    `MULTI_SERVICE` exists so the rule table's shape is already right for a
+    future action type that fans out across services, not because anything
+    classifies into it yet."""
+
+    SINGLE_SERVICE = "single_service"
+    MULTI_SERVICE = "multi_service"
+
+
+class ActionStatus(StrEnum):
+    """Action lifecycle values used in application code. NOT mapped as a
+    Postgres enum column — `Action.status` stays a plain string (T1's own
+    note: "fields whose lifecycle a later task will define precisely ...
+    stay plain str"), because this lifecycle keeps growing across T8-T10
+    (T9 adds approval outcomes, T10 adds execution outcomes); a Python-level
+    closed set without a DB enum avoids an `ALTER TYPE ... ADD VALUE`
+    migration every time a downstream task extends it."""
+
+    PROPOSED = "proposed"
+    PENDING_APPROVAL = "pending_approval"
+    APPROVED = "approved"
+    FORBIDDEN = "forbidden"
