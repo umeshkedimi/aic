@@ -1,0 +1,32 @@
+[project]
+name = "aic-approval-expirer"
+version = "0.1.0"
+description = "Polls for expired ApprovalRequests and escalates their incidents (design doc §1.10, T9)."
+requires-python = ">=3.13"
+dependencies = [
+    "aic-common",
+    "aic-domain",
+    "aic-database",
+    "aic-agents",
+]
+
+[project.scripts]
+aic-approval-expirer = "aic_approval_expirer.main:main"
+
+[dependency-groups]
+dev = [
+    "testcontainers[postgres]>=4.8",
+]
+
+[tool.uv.sources]
+aic-common = { workspace = true }
+aic-domain = { workspace = true }
+aic-database = { workspace = true }
+aic-agents = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aic_approval_expirer"]

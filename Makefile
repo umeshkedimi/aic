@@ -3,7 +3,8 @@
 	observability-up observability-down demo-prometheus-alerts \
 	eventbus-up eventbus-down demo-seed demo-services-up demo-services-down \
 	demo-ingest-logs demo-correlator-logs demo-triage-logs demo-investigator-logs \
-	demo-remediator-logs llm-up llm-down
+	demo-remediator-logs demo-approval-api-logs demo-approval-expirer-logs \
+	llm-up llm-down aic-approve
 
 KIND_CLUSTER := aic-demo
 DEMO_NAMESPACE := aic-demo
@@ -33,7 +34,7 @@ typecheck:
 		packages/contracts/src packages/contracts/tests \
 		packages/eventbus/src packages/eventbus/tests \
 		packages/agents/src packages/agents/tests
-	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator aic-triage aic-investigator aic-remediator; do \
+	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator aic-triage aic-investigator aic-remediator aic-approval-api aic-approval-expirer aic-cli; do \
 		uv run mypy apps/$$app/src apps/$$app/tests || exit 1; \
 	done
 
@@ -132,14 +133,16 @@ llm-down:
 demo-seed:
 	uv run --package aic-toy-ops seed-service-dependencies
 
-# aic-ingest/aic-correlator/aic-triage/aic-investigator/aic-remediator (T4,
-# T6, T7, T8) run as background host processes, like apps/toy-ops's
-# deploy/load-generator scripts — see the design note in
-# infra/kind/eventbus/redpanda.yaml. aic-triage/aic-investigator/
-# aic-remediator additionally require the litellm proxy (make llm-up) to be
-# reachable; aic-investigator also mints its own read-only aic-investigator
-# ServiceAccount token from the current kubeconfig at startup
-# (infra/kind/rbac.yaml, T2) — the demo cluster must already exist.
+# aic-ingest/aic-correlator/aic-triage/aic-investigator/aic-remediator/
+# aic-approval-api/aic-approval-expirer (T4, T6, T7, T8, T9) run as
+# background host processes, like apps/toy-ops's deploy/load-generator
+# scripts — see the design note in infra/kind/eventbus/redpanda.yaml.
+# aic-triage/aic-investigator/aic-remediator additionally require the
+# litellm proxy (make llm-up) to be reachable; aic-investigator also mints
+# its own read-only aic-investigator ServiceAccount token from the current
+# kubeconfig at startup (infra/kind/rbac.yaml, T2) — the demo cluster must
+# already exist. aic-approval-api needs AIC_APPROVAL_API_IDENTITIES set
+# (see .env.example) to authenticate any decision at all.
 demo-services-up:
 	mkdir -p $(DEMO_RUN_DIR)
 	uv run --package aic-ingest aic-ingest > $(DEMO_RUN_DIR)/aic-ingest.log 2>&1 & \
@@ -152,7 +155,11 @@ demo-services-up:
 		echo $$! > $(DEMO_RUN_DIR)/aic-investigator.pid
 	uv run --package aic-remediator aic-remediator > $(DEMO_RUN_DIR)/aic-remediator.log 2>&1 & \
 		echo $$! > $(DEMO_RUN_DIR)/aic-remediator.pid
-	@echo "aic-ingest, aic-correlator, aic-triage, aic-investigator, and aic-remediator started — logs: $(DEMO_RUN_DIR)/*.log"
+	uv run --package aic-approval-api aic-approval-api > $(DEMO_RUN_DIR)/aic-approval-api.log 2>&1 & \
+		echo $$! > $(DEMO_RUN_DIR)/aic-approval-api.pid
+	uv run --package aic-approval-expirer aic-approval-expirer > $(DEMO_RUN_DIR)/aic-approval-expirer.log 2>&1 & \
+		echo $$! > $(DEMO_RUN_DIR)/aic-approval-expirer.pid
+	@echo "aic-ingest, aic-correlator, aic-triage, aic-investigator, aic-remediator, aic-approval-api, and aic-approval-expirer started — logs: $(DEMO_RUN_DIR)/*.log"
 
 demo-services-down:
 	-[ -f $(DEMO_RUN_DIR)/aic-ingest.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-ingest.pid) 2>/dev/null; \
@@ -165,6 +172,10 @@ demo-services-down:
 		rm -f $(DEMO_RUN_DIR)/aic-investigator.pid
 	-[ -f $(DEMO_RUN_DIR)/aic-remediator.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-remediator.pid) 2>/dev/null; \
 		rm -f $(DEMO_RUN_DIR)/aic-remediator.pid
+	-[ -f $(DEMO_RUN_DIR)/aic-approval-api.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-approval-api.pid) 2>/dev/null; \
+		rm -f $(DEMO_RUN_DIR)/aic-approval-api.pid
+	-[ -f $(DEMO_RUN_DIR)/aic-approval-expirer.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-approval-expirer.pid) 2>/dev/null; \
+		rm -f $(DEMO_RUN_DIR)/aic-approval-expirer.pid
 
 demo-ingest-logs:
 	tail -f $(DEMO_RUN_DIR)/aic-ingest.log
@@ -180,6 +191,18 @@ demo-investigator-logs:
 
 demo-remediator-logs:
 	tail -f $(DEMO_RUN_DIR)/aic-remediator.log
+
+demo-approval-api-logs:
+	tail -f $(DEMO_RUN_DIR)/aic-approval-api.log
+
+demo-approval-expirer-logs:
+	tail -f $(DEMO_RUN_DIR)/aic-approval-expirer.log
+
+# `make aic-approve INCIDENT_ID=<uuid>` — the one-command CLI surface
+# (design doc §1.10 APPROVE row, T9). Requires AIC_CLI_DECIDER_ID (and
+# optionally AIC_CLI_DECIDER_ROLES) in the environment or .env.
+aic-approve:
+	uv run --package aic-cli aic approve $(INCIDENT_ID)
 
 demo-deploy-good:
 	uv run --package aic-toy-ops deploy-payment-service --preset good

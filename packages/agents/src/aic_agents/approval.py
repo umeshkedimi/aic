@@ -96,8 +96,23 @@ def record_decision(
 ) -> ApprovalDecisionRow:
     """Cast one decider's vote and, if it resolves the request, transition
     the incident. Must run as the first operation on `session` (see module
-    docstring)."""
-    session.connection(execution_options={"isolation_level": "SERIALIZABLE"})
+    docstring).
+
+    That precondition is checked, not just documented: if `session`'s
+    connection/transaction was already established by an earlier statement,
+    Postgres silently keeps the isolation level it started with and
+    SQLAlchemy only *warns* — it does not raise — so a violation would
+    otherwise pass every test that doesn't specifically provoke the race.
+    Reading the isolation level back and failing loudly turns that into a
+    real, enforced invariant instead of a comment someone can forget.
+    """
+    connection = session.connection(execution_options={"isolation_level": "SERIALIZABLE"})
+    if connection.get_isolation_level() != "SERIALIZABLE":
+        raise IllegalStateError(
+            "record_decision() must run as the first operation on a fresh session — "
+            "this session's connection was already established at a different "
+            "isolation level"
+        )
 
     request = session.get(ApprovalRequestRow, approval_request_id)
     if request is None:

@@ -339,6 +339,35 @@ def test_record_decision_raises_for_unknown_request(
         )
 
 
+def test_record_decision_rejects_a_session_whose_transaction_already_started(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A caller that runs any statement on `session` before calling
+    `record_decision` (e.g. an earlier bug in `aic_cli`'s `approve()`)
+    would silently lose the `SERIALIZABLE` isolation guarantee — SQLAlchemy
+    only warns, it does not raise, once the connection is already
+    established. This must fail loudly instead."""
+    with session_factory() as session:
+        incident_id, request_id = _seed_pending_approval(session, quorum=1)
+
+    with session_factory() as session:
+        # Any prior statement establishes the connection/transaction at the
+        # default isolation level before record_decision gets a chance to
+        # request SERIALIZABLE.
+        session.get(Incident, incident_id)
+        with pytest.raises(IllegalStateError, match="first operation on a fresh session"):
+            record_decision(
+                session,
+                request_id,
+                decider_id="alice",
+                decider_roles=frozenset({"sre"}),
+                decision=ApprovalDecisionType.APPROVE,
+                reason=None,
+                clock=FixedClock(datetime.now(UTC)),
+            )
+        session.rollback()
+
+
 def test_expire_request_past_due_escalates_the_incident(
     session_factory: sessionmaker[Session],
 ) -> None:

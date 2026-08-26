@@ -10,6 +10,8 @@ from aic_common.config import Environment
 from aic_database.models import (
     RCA,
     Action,
+    ApprovalDecision,
+    ApprovalRequest,
     Deployment,
     Evidence,
     Hypothesis,
@@ -31,6 +33,8 @@ def _clean_tables(session_factory: sessionmaker[Session]) -> None:
     table by design (a global poller, not scoped to one test's data) —
     same reason `aic_triage`'s tests need this (T6's note)."""
     with session_factory() as session:
+        session.execute(delete(ApprovalDecision))
+        session.execute(delete(ApprovalRequest))
         session.execute(delete(PolicyDecision))
         session.execute(delete(Action))
         session.execute(delete(RemediationProposal))

@@ -10,7 +10,9 @@ resolution-markers = [
 members = [
     "aic-agents",
     "aic-approval-api",
+    "aic-approval-expirer",
     "aic-checkout-service",
+    "aic-cli",
     "aic-common",
     "aic-contracts",
     "aic-correlator",
@@ -103,6 +105,33 @@ dev = [
 ]
 
 [[package]]
+name = "aic-approval-expirer"
+version = "0.1.0"
+source = { editable = "apps/aic-approval-expirer" }
+dependencies = [
+    { name = "aic-agents" },
+    { name = "aic-common" },
+    { name = "aic-database" },
+    { name = "aic-domain" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "testcontainers" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aic-agents", editable = "packages/agents" },
+    { name = "aic-common", editable = "packages/common" },
+    { name = "aic-database", editable = "packages/database" },
+    { name = "aic-domain", editable = "packages/domain" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "testcontainers", extras = ["postgres"], specifier = ">=4.8" }]
+
+[[package]]
 name = "aic-checkout-service"
 version = "0.1.0"
 source = { editable = "apps/checkout-service" }
@@ -125,6 +154,33 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = []
+
+[[package]]
+name = "aic-cli"
+version = "0.1.0"
+source = { editable = "apps/aic-cli" }
+dependencies = [
+    { name = "aic-agents" },
+    { name = "aic-common" },
+    { name = "aic-database" },
+    { name = "aic-domain" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "testcontainers" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aic-agents", editable = "packages/agents" },
+    { name = "aic-common", editable = "packages/common" },
+    { name = "aic-database", editable = "packages/database" },
+    { name = "aic-domain", editable = "packages/domain" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "testcontainers", extras = ["postgres"], specifier = ">=4.8" }]
 
 [[package]]
 name = "aic-common"
