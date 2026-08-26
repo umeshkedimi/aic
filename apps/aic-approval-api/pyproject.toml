@@ -1,0 +1,35 @@
+[project]
+name = "aic-approval-api"
+version = "0.1.0"
+description = "Authenticated POST /approvals/{id}/decision endpoint (design doc §1.10, T9)."
+requires-python = ">=3.13"
+dependencies = [
+    "aic-common",
+    "aic-domain",
+    "aic-database",
+    "aic-agents",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
+
+[project.scripts]
+aic-approval-api = "aic_approval_api.main:main"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+    "testcontainers[postgres]>=4.8",
+]
+
+[tool.uv.sources]
+aic-common = { workspace = true }
+aic-domain = { workspace = true }
+aic-database = { workspace = true }
+aic-agents = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aic_approval_api"]

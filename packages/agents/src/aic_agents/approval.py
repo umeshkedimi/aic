@@ -68,7 +68,11 @@ def _next_seq(session: Session, incident_id: UUID) -> int:
     return result + 1
 
 
-def _load_incident_for_action(session: Session, action_id: UUID) -> IncidentRow:
+def load_incident_for_action(session: Session, action_id: UUID) -> IncidentRow:
+    """Public (not `_`-prefixed): `aic_approval_api` also needs this lookup
+    to report the resulting incident state in its HTTP response, and
+    re-deriving the same Action -> RemediationProposal -> Incident join in
+    a second place would risk it silently drifting from this one."""
     incident_id = session.execute(
         select(RemediationProposalRow.incident_id)
         .join(ActionRow, ActionRow.proposal_id == RemediationProposalRow.id)
@@ -129,7 +133,7 @@ def record_decision(
             f"request {approval_request_id}"
         ) from exc
 
-    incident = _load_incident_for_action(session, request.action_id)
+    incident = load_incident_for_action(session, request.action_id)
     session.add(
         IncidentEvent(
             incident_id=incident.id,
@@ -201,7 +205,7 @@ def expire_request(session: Session, approval_request_id: UUID, *, clock: Clock)
         raise IllegalStateError(f"approval request {approval_request_id} has not yet expired")
 
     request.status = ApprovalRequestStatus.EXPIRED.value
-    incident = _load_incident_for_action(session, request.action_id)
+    incident = load_incident_for_action(session, request.action_id)
     incident.status = transition(incident.status, IncidentTransitionEvent.EXPIRED)
     session.add(
         IncidentEvent(

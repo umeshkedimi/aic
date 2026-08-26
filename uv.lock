@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "aic-agents",
+    "aic-approval-api",
     "aic-checkout-service",
     "aic-common",
     "aic-contracts",
@@ -65,6 +66,41 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "testcontainers", specifier = ">=4.8" }]
+
+[[package]]
+name = "aic-approval-api"
+version = "0.1.0"
+source = { editable = "apps/aic-approval-api" }
+dependencies = [
+    { name = "aic-agents" },
+    { name = "aic-common" },
+    { name = "aic-database" },
+    { name = "aic-domain" },
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "testcontainers" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aic-agents", editable = "packages/agents" },
+    { name = "aic-common", editable = "packages/common" },
+    { name = "aic-database", editable = "packages/database" },
+    { name = "aic-domain", editable = "packages/domain" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "testcontainers", extras = ["postgres"], specifier = ">=4.8" },
+]
 
 [[package]]
 name = "aic-checkout-service"

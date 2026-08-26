@@ -21,6 +21,14 @@ extend-exclude = ["packages/database/alembic/versions"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's own dependency-injection idiom (`param: T = Depends(...)`) is a
+# function call in a default value, exactly what B008 exists to catch for
+# genuinely mutable/expensive defaults — this one isn't that, it's how
+# FastAPI resolves dependencies, so it's the documented way to tell B008
+# about it rather than a per-callsite noqa (T9, aic-approval-api).
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Security"]
+
 [tool.mypy]
 python_version = "3.13"
 strict = true
@@ -39,6 +47,9 @@ mypy_path = [
     "apps/aic-triage/src",
     "apps/aic-investigator/src",
     "apps/aic-remediator/src",
+    "apps/aic-approval-api/src",
+    "apps/aic-approval-expirer/src",
+    "apps/aic-cli/src",
 ]
 explicit_package_bases = true
 # No `files` list here, deliberately: `apps/*` directory names are
@@ -76,4 +87,7 @@ testpaths = [
     "apps/aic-triage/tests",
     "apps/aic-investigator/tests",
     "apps/aic-remediator/tests",
+    "apps/aic-approval-api/tests",
+    "apps/aic-approval-expirer/tests",
+    "apps/aic-cli/tests",
 ]
