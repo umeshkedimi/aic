@@ -28,6 +28,12 @@ class ConfigurationError(AICError):
     """Required configuration is missing or invalid."""
 
 
+class AuthorizationError(AICError):
+    """An authenticated caller lacks the role/permission an operation
+    requires (distinct from unauthenticated, which is a transport-layer
+    concern, not a domain one)."""
+
+
 class ExternalServiceError(AICError):
     """A call to an external system (HTTP, DB, LLM, Kafka, ...) failed.
 

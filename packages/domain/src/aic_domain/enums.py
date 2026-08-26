@@ -135,3 +135,15 @@ class ActionStatus(StrEnum):
     PENDING_APPROVAL = "pending_approval"
     APPROVED = "approved"
     FORBIDDEN = "forbidden"
+
+
+class ApprovalRequestStatus(StrEnum):
+    """`ApprovalRequest` lifecycle values (design doc §1.10, T9). Like
+    `ActionStatus`, NOT mapped as a Postgres enum column —
+    `ApprovalRequest.status` stays a plain string, per T1's "fields whose
+    lifecycle a later task will define precisely stay plain str" note."""
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXPIRED = "expired"

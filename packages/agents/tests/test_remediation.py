@@ -27,7 +27,15 @@ from aic_agents.remediation import (
 from aic_common.clock import FixedClock
 from aic_common.config import Environment
 from aic_common.errors import IllegalStateError, NotFoundError
-from aic_database.models import RCA, Deployment, Evidence, Hypothesis, Incident, IncidentEvent
+from aic_database.models import (
+    RCA,
+    ApprovalRequest,
+    Deployment,
+    Evidence,
+    Hypothesis,
+    Incident,
+    IncidentEvent,
+)
 from aic_domain.actions import (
     ActionCandidate,
     ConfigChange,
@@ -225,6 +233,19 @@ async def test_policy_effect_differs_by_environment_via_the_real_rule_table(
         assert prod_incident.status == IncidentStatus.AWAITING_APPROVAL
         assert staging_incident.status == IncidentStatus.REMEDIATING
 
+        prod_request = session.execute(
+            select(ApprovalRequest).where(ApprovalRequest.action_id == prod_action.id)
+        ).scalar_one()
+        assert prod_request.quorum == 1
+        assert prod_request.required_roles == ["sre"]
+        assert prod_request.status == "pending"
+        assert prod_request.expires_at > prod_incident.created_at
+
+        staging_request = session.execute(
+            select(ApprovalRequest).where(ApprovalRequest.action_id == staging_action.id)
+        ).scalar_one_or_none()
+        assert staging_request is None
+
 
 async def test_forbidden_environment_escalates_the_incident(
     session_factory: sessionmaker[Session],
@@ -325,7 +346,11 @@ async def test_creates_the_expected_audit_events(session_factory: sessionmaker[S
             .all()
         )
         event_types = [e.event_type for e in events]
-        assert event_types == ["remediation_proposed", "proposal_requires_approval"]
+        assert event_types == [
+            "remediation_proposed",
+            "proposal_requires_approval",
+            "approval_requested",
+        ]
         assert events[0].actor_type.value == "llm"
         assert events[1].actor_type.value == "system"
 

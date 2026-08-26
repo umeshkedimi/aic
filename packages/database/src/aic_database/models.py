@@ -200,10 +200,15 @@ class ApprovalRequest(Base):
 
 
 class ApprovalDecision(Base):
-    """Immutable once cast (§1.10) — application code must never UPDATE a row
-    here; enforcing that at the DB level (trigger/rule) is T9's job."""
+    """Immutable once cast (§1.10): enforced by an `alembic`-managed Postgres
+    trigger (`packages/database/alembic/versions/`, T9) that rejects any
+    UPDATE/DELETE against this table outright, not just by application code
+    never issuing one. The unique constraint below is the other T9
+    invariant — one decision per decider per request, so a single decider
+    can never inflate quorum by voting twice."""
 
     __tablename__ = "approval_decision"
+    __table_args__ = (sa.UniqueConstraint("approval_request_id", "decider_id"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
     approval_request_id: Mapped[uuid.UUID] = mapped_column(

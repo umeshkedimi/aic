@@ -28,10 +28,11 @@ Policy application (`aic_domain.policy.evaluate_policy`) is deterministic
 and decides which `IncidentTransitionEvent` fires:
 
 - `AUTO_APPROVE`  -> `all_actions_auto_approved` -> `REMEDIATING`
-- `REQUIRE_APPROVAL` -> `proposal_requires_approval` -> `AWAITING_APPROVAL`
-  (creating the actual `ApprovalRequest` row is T9's job, not this one —
-  this stage only records the policy decision and moves the incident to
-  the state T9's poller watches)
+- `REQUIRE_APPROVAL` -> `proposal_requires_approval` -> `AWAITING_APPROVAL`,
+  plus the actual `ApprovalRequest` row (quorum/required_roles straight off
+  the `PolicyRule` already in hand here — no need to re-derive them later).
+  T9 added this; see its own module (`aic_agents.approval`) for what
+  happens to the request from here (recording decisions, quorum, expiry).
 - `FORBID` -> no dedicated state-machine event exists for "policy forbade
   this action", so this uses `HUMAN_TAKEOVER` (closest existing semantic
   fit: automated remediation cannot proceed, a human must decide next
@@ -50,6 +51,7 @@ from aic_common.errors import IllegalStateError, NotFoundError
 from aic_common.ids import new_id
 from aic_database.models import RCA as RCARow
 from aic_database.models import Action as ActionRow
+from aic_database.models import ApprovalRequest as ApprovalRequestRow
 from aic_database.models import Deployment as DeploymentRow
 from aic_database.models import Evidence as EvidenceRow
 from aic_database.models import Hypothesis as HypothesisRow
@@ -63,10 +65,12 @@ from aic_domain.actions import (
     PatchConfigParams,
     RollbackDeploymentParams,
 )
+from aic_domain.approval import DEFAULT_APPROVAL_EXPIRY
 from aic_domain.enums import (
     ActionStatus,
     ActionType,
     ActorType,
+    ApprovalRequestStatus,
     IncidentStatus,
     IncidentTransitionEvent,
     PolicyEffect,
@@ -238,6 +242,43 @@ async def plan_remediation(
             created_at=clock.now(),
         )
     )
+
+    if rule.effect == PolicyEffect.REQUIRE_APPROVAL:
+        if rule.quorum is None:
+            raise IllegalStateError(
+                f"policy rule {rule.rule_id!r} (v{rule.version}) requires approval but "
+                "declares no quorum"
+            )
+        approval_request_id = new_id()
+        expires_at = clock.now() + DEFAULT_APPROVAL_EXPIRY
+        session.add(
+            ApprovalRequestRow(
+                id=approval_request_id,
+                action_id=action_id,
+                quorum=rule.quorum,
+                required_roles=list(rule.required_roles),
+                expires_at=expires_at,
+                status=ApprovalRequestStatus.PENDING.value,
+                created_at=clock.now(),
+            )
+        )
+        session.add(
+            IncidentEvent(
+                incident_id=incident_id,
+                seq=_next_seq(session, incident_id),
+                event_type="approval_requested",
+                actor_type=ActorType.SYSTEM,
+                payload={
+                    "approval_request_id": str(approval_request_id),
+                    "action_id": str(action_id),
+                    "quorum": rule.quorum,
+                    "required_roles": list(rule.required_roles),
+                    "expires_at": expires_at.isoformat(),
+                },
+                created_at=clock.now(),
+            )
+        )
+
     return action
 
 
