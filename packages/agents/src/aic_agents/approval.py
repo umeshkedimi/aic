@@ -49,6 +49,7 @@ from aic_database.models import IncidentEvent
 from aic_database.models import RemediationProposal as RemediationProposalRow
 from aic_domain.approval import evaluate_outcome, is_eligible
 from aic_domain.enums import (
+    ActionStatus,
     ActorType,
     ApprovalDecisionType,
     ApprovalRequestStatus,
@@ -178,6 +179,14 @@ def record_decision(
 
     if outcome == ApprovalRequestStatus.APPROVED:
         request.status = ApprovalRequestStatus.APPROVED.value
+        action = session.get(ActionRow, request.action_id)
+        assert action is not None
+        # T8's auto-approve path sets this directly; the require-approval
+        # path only reaches "approved" here, at quorum, so it must set it
+        # too — otherwise Action.status would stay `pending_approval`
+        # forever on this path, and T10's executor (which finds work by
+        # `Action.status == APPROVED`) would never see it.
+        action.status = ActionStatus.APPROVED.value
         incident.status = transition(incident.status, IncidentTransitionEvent.QUORUM_MET)
         session.add(
             IncidentEvent(

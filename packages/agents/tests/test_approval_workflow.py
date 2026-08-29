@@ -25,7 +25,12 @@ from aic_database.models import (
     IncidentEvent,
     RemediationProposal,
 )
-from aic_domain.enums import ApprovalDecisionType, ApprovalRequestStatus, IncidentStatus
+from aic_domain.enums import (
+    ActionStatus,
+    ApprovalDecisionType,
+    ApprovalRequestStatus,
+    IncidentStatus,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -125,6 +130,15 @@ def test_single_approval_meets_quorum_one_and_remediates(
         assert incident is not None
         assert request.status == ApprovalRequestStatus.APPROVED.value
         assert incident.status == IncidentStatus.REMEDIATING
+        # Regression (T10): the require-approval path only ever reaches
+        # `Action.status = approved` here, at quorum — T8's auto-approve
+        # path sets it directly, but before this fix the require-approval
+        # path left it stuck at `pending_approval` forever, which would
+        # make T10's executor (which finds work by `Action.status ==
+        # approved`) never see an action a human approved.
+        action = session.get(Action, request.action_id)
+        assert action is not None
+        assert action.status == ActionStatus.APPROVED.value
         assert _event_types(session, incident_id) == [
             "approval_decision_recorded",
             "quorum_met",
