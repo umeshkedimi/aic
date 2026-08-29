@@ -21,19 +21,18 @@ investigative K8s read uses only that scoped token — never the operator's
 own admin credential. Even a compromised/prompt-injected tool call
 reaching this credential can only get/list/watch pods/events/deployments/
 replicasets in the `aic-demo` namespace (see `infra/kind/rbac.yaml`); it
-cannot patch or delete anything, which is exactly the boundary T10's
-executor privilege-separation test (T10) will assert the *other* side of.
+cannot patch or delete anything — `aic_agents.execution` (T10) is the
+*other* side of that boundary, minted for `aic-executor` instead and
+never imported here.
+
+The actual token-minting mechanics live in `aic_agents.k8s_auth`, shared
+with `aic_agents.execution`'s executor credential loader (T10) — the two
+differ only in which ServiceAccount name they mint for.
 """
 
 from __future__ import annotations
 
 import asyncio
-import base64
-import os
-import subprocess
-import tempfile
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -42,13 +41,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from aic_agents.k8s_auth import ServiceAccountCredentials, mint_service_account_credentials
 from aic_agents.tools.base import ToolSpec
 
 GET_DEPLOYMENT_HISTORY = "k8s.get_deployment_history"
 GET_SERVICE_DEPENDENCIES = "k8s.get_service_dependencies"
 GET_POD_EVENTS = "k8s.get_pod_events"
 
-_SUBPROCESS_TIMEOUT_SECONDS = 10.0
+InvestigatorK8sCredentials = ServiceAccountCredentials
 
 
 class DeploymentHistoryInput(BaseModel):
@@ -65,14 +65,6 @@ class PodEventsInput(BaseModel):
     limit: int = Field(default=50, ge=1, le=500)
 
 
-@dataclass(slots=True)
-class InvestigatorK8sCredentials:
-    server: str
-    ca_cert_path: Path
-    token: str
-    namespace: str
-
-
 def load_investigator_credentials(
     *,
     context: str,
@@ -82,59 +74,15 @@ def load_investigator_credentials(
     kubectl: str = "kubectl",
 ) -> InvestigatorK8sCredentials:
     """Mint the `aic-investigator` ServiceAccount's own credentials from the
-    operator's kubeconfig (a one-time, admin-privileged bootstrap step —
-    that's how any credential is provisioned). Every subsequent K8s read
-    uses only what's returned here."""
-    server = subprocess.run(
-        [
-            kubectl,
-            "config",
-            "view",
-            "--raw",
-            "-o",
-            f'jsonpath={{.clusters[?(@.name=="{context}")].cluster.server}}',
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=_SUBPROCESS_TIMEOUT_SECONDS,
-    ).stdout.strip()
-    ca_data_b64 = subprocess.run(
-        [
-            kubectl,
-            "config",
-            "view",
-            "--raw",
-            "-o",
-            f'jsonpath={{.clusters[?(@.name=="{context}")].cluster.certificate-authority-data}}',
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=_SUBPROCESS_TIMEOUT_SECONDS,
-    ).stdout.strip()
-    token = subprocess.run(
-        [
-            kubectl,
-            "create",
-            "token",
-            service_account,
-            "-n",
-            namespace,
-            f"--duration={token_duration}",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=_SUBPROCESS_TIMEOUT_SECONDS,
-    ).stdout.strip()
-
-    fd, ca_file_name = tempfile.mkstemp(suffix=".crt")
-    os.close(fd)
-    ca_file = Path(ca_file_name)
-    ca_file.write_bytes(base64.b64decode(ca_data_b64))
-    return InvestigatorK8sCredentials(
-        server=server, ca_cert_path=ca_file, token=token, namespace=namespace
+    operator's kubeconfig. Every subsequent K8s read uses only what's
+    returned here. Thin wrapper over `aic_agents.k8s_auth`'s shared minter —
+    see that module's docstring for why the mechanics live there."""
+    return mint_service_account_credentials(
+        context=context,
+        namespace=namespace,
+        service_account=service_account,
+        token_duration=token_duration,
+        kubectl=kubectl,
     )
 
 
