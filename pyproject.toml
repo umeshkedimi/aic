@@ -50,6 +50,7 @@ mypy_path = [
     "apps/aic-approval-api/src",
     "apps/aic-approval-expirer/src",
     "apps/aic-cli/src",
+    "apps/aic-executor/src",
 ]
 explicit_package_bases = true
 # No `files` list here, deliberately: `apps/*` directory names are
@@ -90,4 +91,5 @@ testpaths = [
     "apps/aic-approval-api/tests",
     "apps/aic-approval-expirer/tests",
     "apps/aic-cli/tests",
+    "apps/aic-executor/tests",
 ]

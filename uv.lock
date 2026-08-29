@@ -19,6 +19,7 @@ members = [
     "aic-database",
     "aic-domain",
     "aic-eventbus",
+    "aic-executor",
     "aic-ingest",
     "aic-investigator",
     "aic-payment-service",
@@ -314,6 +315,33 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [{ name = "testcontainers", specifier = ">=4.8" }]
+
+[[package]]
+name = "aic-executor"
+version = "0.1.0"
+source = { editable = "apps/aic-executor" }
+dependencies = [
+    { name = "aic-agents" },
+    { name = "aic-common" },
+    { name = "aic-database" },
+    { name = "aic-domain" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "testcontainers" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aic-agents", editable = "packages/agents" },
+    { name = "aic-common", editable = "packages/common" },
+    { name = "aic-database", editable = "packages/database" },
+    { name = "aic-domain", editable = "packages/domain" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "testcontainers", extras = ["postgres"], specifier = ">=4.8" }]
 
 [[package]]
 name = "aic-ingest"
