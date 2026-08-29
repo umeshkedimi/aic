@@ -197,6 +197,7 @@ class ApprovalRequest(Base):
     expires_at: Mapped[datetime] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(server_default=sa.func.now())
     status: Mapped[str] = mapped_column(sa.String, default="pending")
+    dry_run_result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
 
 
 class ApprovalDecision(Base):

@@ -135,6 +135,8 @@ class ActionStatus(StrEnum):
     PENDING_APPROVAL = "pending_approval"
     APPROVED = "approved"
     FORBIDDEN = "forbidden"
+    EXECUTED = "executed"
+    EXECUTION_FAILED = "execution_failed"
 
 
 class ApprovalRequestStatus(StrEnum):
@@ -147,3 +149,13 @@ class ApprovalRequestStatus(StrEnum):
     APPROVED = "approved"
     REJECTED = "rejected"
     EXPIRED = "expired"
+
+
+class ExecutionStatus(StrEnum):
+    """`ExecutionRecord.status` values (design doc §1.11, T10). Like
+    `ActionStatus`/`ApprovalRequestStatus`, NOT mapped as a Postgres enum
+    column — stays a plain string per T1's convention."""
+
+    STARTED = "started"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
