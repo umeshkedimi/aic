@@ -21,7 +21,11 @@ from sqlalchemy.orm import Session, sessionmaker
 
 
 def _seed_pending_approval(
-    session: Session, *, quorum: int = 1, required_roles: list[str] | None = None
+    session: Session,
+    *,
+    quorum: int = 1,
+    required_roles: list[str] | None = None,
+    dry_run_result: dict[str, object] | None = None,
 ) -> tuple[UUID, UUID]:
     now = datetime.now(UTC)
     service = f"payment-service-{uuid4().hex[:8]}"
@@ -45,7 +49,7 @@ def _seed_pending_approval(
     action = Action(
         proposal_id=proposal.id,
         action_type="RollbackDeployment",
-        params={},
+        params={"deployment": service, "from_version": "v42", "to_version": "v41"},
         target_resource=service,
         status="pending_approval",
         idempotency_key=f"{incident.id}:{rca.id}:RollbackDeployment",
@@ -60,6 +64,7 @@ def _seed_pending_approval(
         expires_at=now + timedelta(minutes=30),
         status=ApprovalRequestStatus.PENDING.value,
         created_at=now,
+        dry_run_result=dry_run_result,
     )
     session.add(request)
     session.commit()
@@ -84,6 +89,57 @@ def test_health(session_factory: sessionmaker[Session]) -> None:
     with TestClient(_app(session_factory)) as client:
         resp = client.get("/health")
     assert resp.status_code == 200
+
+
+def test_get_card_returns_the_approval_details_including_dry_run(
+    session_factory: sessionmaker[Session],
+) -> None:
+    dry_run = {"command": ["kubectl", "rollout", "undo"], "returncode": 0}
+    with session_factory() as session:
+        incident_id, request_id = _seed_pending_approval(session, dry_run_result=dry_run)
+
+    with TestClient(_app(session_factory)) as client:
+        resp = client.get(
+            f"/approvals/{request_id}", headers={"Authorization": "Bearer tok_alice"}
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["approval_request_id"] == str(request_id)
+    assert body["incident_id"] == str(incident_id)
+    assert body["status"] == "pending"
+    assert body["action_type"] == "RollbackDeployment"
+    assert body["dry_run_result"] == dry_run
+
+
+def test_get_card_without_a_dry_run_returns_null(session_factory: sessionmaker[Session]) -> None:
+    with session_factory() as session:
+        _incident_id, request_id = _seed_pending_approval(session)
+
+    with TestClient(_app(session_factory)) as client:
+        resp = client.get(
+            f"/approvals/{request_id}", headers={"Authorization": "Bearer tok_alice"}
+        )
+
+    assert resp.status_code == 200
+    assert resp.json()["dry_run_result"] is None
+
+
+def test_get_card_requires_authentication(session_factory: sessionmaker[Session]) -> None:
+    with session_factory() as session:
+        _incident_id, request_id = _seed_pending_approval(session)
+
+    with TestClient(_app(session_factory)) as client:
+        resp = client.get(f"/approvals/{request_id}")
+    assert resp.status_code == 401
+
+
+def test_get_card_unknown_request_is_not_found(session_factory: sessionmaker[Session]) -> None:
+    with TestClient(_app(session_factory)) as client:
+        resp = client.get(
+            f"/approvals/{uuid4()}", headers={"Authorization": "Bearer tok_alice"}
+        )
+    assert resp.status_code == 404
 
 
 def test_approve_meets_quorum_and_returns_resulting_state(

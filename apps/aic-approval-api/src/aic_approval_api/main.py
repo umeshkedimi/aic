@@ -18,7 +18,7 @@ from aic_agents.approval import load_incident_for_action, record_decision
 from aic_common.clock import Clock, SystemClock
 from aic_common.errors import AuthorizationError, IllegalStateError, NotFoundError
 from aic_common.logging import configure_logging, get_logger
-from aic_database.models import ApprovalRequest
+from aic_database.models import Action, ApprovalRequest
 from aic_database.session import (
     DatabaseSettings,
     create_database_engine,
@@ -48,6 +48,26 @@ class DecisionResponse(BaseModel):
     approval_status: str
     incident_id: UUID
     incident_status: str
+
+
+class ApprovalCard(BaseModel):
+    """What a human sees before deciding (design doc §1.4 ACT row: the
+    dry-run "attached to the approval card"). `dry_run_result` is whatever
+    `aic_agents.execution.dry_run_action` returned when `plan_remediation`
+    created this request — `None` if no executor credential was available
+    at planning time (see `aic_agents.remediation._try_dry_run`), or an
+    `{"error": ...}` payload if the dry run itself failed."""
+
+    approval_request_id: UUID
+    incident_id: UUID
+    status: str
+    quorum: int
+    required_roles: list[str]
+    expires_at: str
+    action_type: str
+    target_resource: str
+    params: dict[str, object]
+    dry_run_result: dict[str, object] | None
 
 
 def create_app(
@@ -100,6 +120,33 @@ def create_app(
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/approvals/{approval_request_id}")
+    async def get_card(
+        approval_request_id: UUID,
+        _identity: DeciderIdentity = Depends(_authenticate),
+        session: Session = Depends(_get_session),
+    ) -> ApprovalCard:
+        request = session.get(ApprovalRequest, approval_request_id)
+        if request is None:
+            raise HTTPException(
+                status_code=404, detail=f"no approval request {approval_request_id}"
+            )
+        action = session.get(Action, request.action_id)
+        assert action is not None
+        incident = load_incident_for_action(session, request.action_id)
+        return ApprovalCard(
+            approval_request_id=approval_request_id,
+            incident_id=incident.id,
+            status=request.status,
+            quorum=request.quorum,
+            required_roles=list(request.required_roles),
+            expires_at=request.expires_at.isoformat(),
+            action_type=action.action_type,
+            target_resource=action.target_resource,
+            params=action.params,
+            dry_run_result=request.dry_run_result,
+        )
 
     @app.post("/approvals/{approval_request_id}/decision")
     async def decide(
