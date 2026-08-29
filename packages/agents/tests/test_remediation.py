@@ -12,10 +12,12 @@ structured-output round-tripping is `test_litellm_contract.py`'s job, T5).
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from aic_agents.execution import ExecutionError, ServiceAccountCredentials
 from aic_agents.port import ModelTier
 from aic_agents.remediation import (
     NoRemediationCandidateError,
@@ -46,6 +48,13 @@ from aic_domain.enums import ActionStatus, ActionType, EvidenceStatus, IncidentS
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
+
+_FAKE_EXECUTOR_CREDENTIALS = ServiceAccountCredentials(
+    server="https://fake-k8s.invalid:6443",
+    ca_cert_path=Path("/dev/null"),
+    token="fake-executor-token",
+    namespace="aic-demo",
+)
 
 
 class _FakeLLM:
@@ -240,11 +249,91 @@ async def test_policy_effect_differs_by_environment_via_the_real_rule_table(
         assert prod_request.required_roles == ["sre"]
         assert prod_request.status == "pending"
         assert prod_request.expires_at > prod_incident.created_at
+        # No `executor_credentials` passed here — the dry run is
+        # informational context for the approval card, not a precondition
+        # for planning to succeed (T10's `_try_dry_run` docstring).
+        assert prod_request.dry_run_result is None
 
         staging_request = session.execute(
             select(ApprovalRequest).where(ApprovalRequest.action_id == staging_action.id)
         ).scalar_one_or_none()
         assert staging_request is None
+
+
+async def test_attaches_a_dry_run_to_the_approval_card_when_executor_credentials_given(
+    session_factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The dry-run mechanics themselves (real `kubectl --dry-run=server`
+    invocation) are `test_execution.py`'s job — this test proves T8's
+    `plan_remediation` actually calls `dry_run_action` with the chosen
+    candidate and persists whatever it returns onto the `ApprovalRequest`
+    row, which is the part of T10's scope that lives in this module."""
+    calls: list[tuple[ActionType, dict[str, object]]] = []
+
+    async def _fake_dry_run_action(
+        action_type: ActionType,
+        raw_params: dict[str, object],
+        _credentials: object,
+        *,
+        kubectl: str,
+    ) -> dict[str, object]:
+        calls.append((action_type, raw_params))
+        return {"command": ["kubectl", "rollout", "undo"], "returncode": 0}
+
+    monkeypatch.setattr(
+        "aic_agents.remediation.dry_run_action", _fake_dry_run_action, raising=True
+    )
+
+    with session_factory() as session:
+        incident_id, _service = _seed_investigation(session, environment=Environment.PROD)
+        action = await plan_remediation(
+            session,
+            incident_id,
+            llm=_FakeLLM(chosen_action_type=ActionType.ROLLBACK_DEPLOYMENT),
+            clock=FixedClock(datetime.now(UTC)),
+            executor_credentials=_FAKE_EXECUTOR_CREDENTIALS,  # never touched — dry run is faked
+        )
+        session.commit()
+
+        request = session.execute(
+            select(ApprovalRequest).where(ApprovalRequest.action_id == action.id)
+        ).scalar_one()
+        assert request.dry_run_result == {
+            "command": ["kubectl", "rollout", "undo"],
+            "returncode": 0,
+        }
+    assert len(calls) == 1
+    assert calls[0][0] == ActionType.ROLLBACK_DEPLOYMENT
+
+
+async def test_a_failing_dry_run_is_recorded_but_does_not_block_planning(
+    session_factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _raising_dry_run_action(*_args: object, **_kwargs: object) -> dict[str, object]:
+        raise ExecutionError("cluster unreachable")
+
+    monkeypatch.setattr(
+        "aic_agents.remediation.dry_run_action", _raising_dry_run_action, raising=True
+    )
+
+    with session_factory() as session:
+        incident_id, _service = _seed_investigation(session, environment=Environment.PROD)
+        action = await plan_remediation(
+            session,
+            incident_id,
+            llm=_FakeLLM(chosen_action_type=ActionType.ROLLBACK_DEPLOYMENT),
+            clock=FixedClock(datetime.now(UTC)),
+            executor_credentials=_FAKE_EXECUTOR_CREDENTIALS,
+        )
+        session.commit()
+
+        # Planning still succeeds end-to-end...
+        assert action.status == ActionStatus.PENDING_APPROVAL.value
+        request = session.execute(
+            select(ApprovalRequest).where(ApprovalRequest.action_id == action.id)
+        ).scalar_one()
+        # ...and the failure is recorded as a fact on the card, not hidden.
+        assert request.dry_run_result == {"error": "cluster unreachable"}
 
 
 async def test_forbidden_environment_escalates_the_incident(

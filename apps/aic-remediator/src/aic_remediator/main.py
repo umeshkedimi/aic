@@ -17,6 +17,16 @@ other poller in this codebase today: none of T4/T6/T7's workers catch and
 retry a raised domain error either. A real "escalate to a human when
 automated planning can't proceed" path is out of this task's scope.
 
+T10 adds a write-scoped `aic-executor` K8s credential at startup, minted
+the same way T7's investigator credential is (`aic_agents.k8s_auth`) but
+for a different ServiceAccount — `plan_remediation` uses it to attach a
+real dry-run to the approval card before a human decides (design doc §1.4
+ACT row). This process never itself invokes a mutating `kubectl` command:
+only the pre-built, schema-validated candidate `chosen` by (at most) a
+closed-choice LLM call is ever handed to the dry run, so no LLM-authored
+or externally-sourced content reaches it — `apps/aic-executor` remains the
+only process that performs a real, non-dry-run mutation.
+
 No `SELECT ... FOR UPDATE` here, for the same reason as every other
 poller: single instance for the demo.
 """
@@ -29,6 +39,7 @@ from uuid import UUID
 
 import openai
 from aic_agents.config import LiteLLMSettings
+from aic_agents.execution import ExecutorK8sCredentials, load_executor_credentials
 from aic_agents.litellm_adapter import LiteLLMAdapter
 from aic_agents.port import LLMPort
 from aic_agents.remediation import plan_remediation
@@ -63,13 +74,24 @@ def _find_next_investigated_incident_id(session_factory: sessionmaker[Session]) 
         return result
 
 
-async def _poll_once(session_factory: sessionmaker[Session], llm: LLMPort, clock: Clock) -> bool:
+async def _poll_once(
+    session_factory: sessionmaker[Session],
+    llm: LLMPort,
+    clock: Clock,
+    executor_credentials: ExecutorK8sCredentials | None = None,
+) -> bool:
     incident_id = _find_next_investigated_incident_id(session_factory)
     if incident_id is None:
         return False
 
     with session_scope(session_factory) as session:
-        action = await plan_remediation(session, incident_id, llm=llm, clock=clock)
+        action = await plan_remediation(
+            session,
+            incident_id,
+            llm=llm,
+            clock=clock,
+            executor_credentials=executor_credentials,
+        )
         logger.info(
             "aic_remediator.remediation_planned",
             incident_id=str(incident_id),
@@ -98,10 +120,16 @@ async def run(settings: RemediatorSettings | None = None) -> None:
         timeout_seconds=litellm_settings.timeout_seconds,
     )
 
+    executor_credentials = load_executor_credentials(
+        context=settings.k8s_context,
+        namespace=settings.k8s_namespace,
+        token_duration=settings.k8s_token_duration,
+    )
+
     logger.info("aic_remediator.started", poll_interval_seconds=settings.poll_interval_seconds)
     try:
         while True:
-            processed = await _poll_once(session_factory, llm, clock)
+            processed = await _poll_once(session_factory, llm, clock, executor_credentials)
             if not processed:
                 await asyncio.sleep(settings.poll_interval_seconds)
     finally:

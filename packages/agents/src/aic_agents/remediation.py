@@ -49,6 +49,7 @@ from uuid import UUID
 from aic_common.clock import Clock
 from aic_common.errors import IllegalStateError, NotFoundError
 from aic_common.ids import new_id
+from aic_common.logging import get_logger
 from aic_database.models import RCA as RCARow
 from aic_database.models import Action as ActionRow
 from aic_database.models import ApprovalRequest as ApprovalRequestRow
@@ -81,8 +82,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from aic_agents.execution import ExecutionError, ExecutorK8sCredentials, dry_run_action
 from aic_agents.port import LLMPort, ModelTier
 from aic_agents.tools.k8s import GET_DEPLOYMENT_HISTORY
+
+logger = get_logger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are an SRE choosing a remediation action for an incident whose root "
@@ -122,12 +126,48 @@ class _RemediationChoice(BaseModel):
     rationale: str = Field(min_length=1, max_length=2000)
 
 
+async def _try_dry_run(
+    candidate: ActionCandidate,
+    executor_credentials: ExecutorK8sCredentials | None,
+    *,
+    kubectl: str,
+    incident_id: UUID,
+) -> dict[str, object] | None:
+    """Attach a real dry-run to the approval card *before* a human decides
+    (design doc §1.4 ACT row, T10's `aic_agents.execution.dry_run_action`).
+
+    `executor_credentials` is optional: callers that don't wire K8s access
+    (most unit tests; any environment without a reachable cluster) simply
+    get `dry_run_result=None` rather than being forced to fake a credential
+    just to plan remediation — the dry run is informational context for the
+    approval card, not a precondition for planning to succeed. A dry-run
+    that itself fails (cluster unreachable, kubectl error) is recorded as
+    an `{"error": ...}` payload rather than raised — a bad dry run is a
+    fact worth showing the approver, not a reason to abort planning."""
+    if executor_credentials is None:
+        return None
+    try:
+        return await dry_run_action(
+            candidate.action_type,
+            candidate.params.model_dump(mode="json"),
+            executor_credentials,
+            kubectl=kubectl,
+        )
+    except ExecutionError as exc:
+        logger.warning(
+            "aic_remediation.dry_run_failed", incident_id=str(incident_id), error=str(exc)
+        )
+        return {"error": str(exc)}
+
+
 async def plan_remediation(
     session: Session,
     incident_id: UUID,
     *,
     llm: LLMPort,
     clock: Clock,
+    executor_credentials: ExecutorK8sCredentials | None = None,
+    kubectl: str = "kubectl",
 ) -> ActionRow:
     incident = session.get(IncidentRow, incident_id)
     if incident is None:
@@ -251,6 +291,9 @@ async def plan_remediation(
             )
         approval_request_id = new_id()
         expires_at = clock.now() + DEFAULT_APPROVAL_EXPIRY
+        dry_run_result = await _try_dry_run(
+            chosen, executor_credentials, kubectl=kubectl, incident_id=incident_id
+        )
         session.add(
             ApprovalRequestRow(
                 id=approval_request_id,
@@ -260,6 +303,7 @@ async def plan_remediation(
                 expires_at=expires_at,
                 status=ApprovalRequestStatus.PENDING.value,
                 created_at=clock.now(),
+                dry_run_result=dry_run_result,
             )
         )
         session.add(
