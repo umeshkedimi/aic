@@ -65,6 +65,20 @@ rules:
     resources: ["deployments"]
     resourceNames: ["payment-service"]
     verbs: ["get", "list", "patch"]
+  # `kubectl rollout undo` (T10, ADR 0003) resolves the target revision by
+  # listing the ReplicaSets a Deployment owns before it ever patches the
+  # Deployment — a real requirement only live-cluster testing surfaced
+  # (T10's task-board note): without this, every real rollback attempt
+  # fails with "replicasets.apps is forbidden" even though the `patch` on
+  # `deployments` above is otherwise sufficient. Read-only (no
+  # patch/delete on replicasets themselves — only the Deployment object is
+  # ever mutated), and, like the `list` limitation noted above,
+  # `resourceNames` can't scope this to payment-service's own ReplicaSets
+  # (they're dynamically named, not `payment-service` itself); the real
+  # boundary remains namespace-scoped, read-only on this resource kind.
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
