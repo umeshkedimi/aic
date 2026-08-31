@@ -129,6 +129,30 @@ class RCAResult(BaseModel):
     iterations_used: int = 0
 
 
+def p99_query(service: str) -> str:
+    """PromQL for p99 request latency, filtered on `app="..."` (see `plan`'s
+    docstring for why `app`, not `service`). Exported (not `_`-prefixed) so
+    T11's verifier (`aic_agents.verification`) re-runs the *exact same*
+    query text post-soak, per design doc §1.12."""
+    return (
+        "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket"
+        f'{{app="{service}"}}[1m])) by (le))'
+    )
+
+
+def pool_query(service: str) -> str:
+    """PromQL for DB pool utilization. Exported for the same reason as
+    `p99_query`."""
+    return f'db_pool_connections_in_use{{app="{service}"}}'
+
+
+def log_query(service: str) -> str:
+    """LogQL matching both `error` and `warning` levels (see `plan`'s
+    docstring for why not `error`-only). Exported for the same reason as
+    `p99_query`."""
+    return f'{{app="{service}"}} |~ `"level": "(error|warning)"`'
+
+
 def plan(*, service: str, window_start: datetime, window_end: datetime) -> list[LineOfInquiry]:
     """Fixed lines of inquiry for this scenario (§1.4: "not LLM-chosen").
     `window_start` is symptom onset; the 1h-prior baseline is `window_start
@@ -152,32 +176,29 @@ def plan(*, service: str, window_start: datetime, window_end: datetime) -> list[
     """
     baseline_start = window_start - timedelta(hours=1)
     baseline_end = window_start
-    p99_query = (
-        "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket"
-        f'{{app="{service}"}}[1m])) by (le))'
-    )
-    pool_query = f'db_pool_connections_in_use{{app="{service}"}}'
-    log_query = f'{{app="{service}"}} |~ `"level": "(error|warning)"`'
+    p99 = p99_query(service)
+    pool = pool_query(service)
+    logs = log_query(service)
 
     return [
         LineOfInquiry(
             tool="prometheus.range_query",
-            params={"query": p99_query, "start": window_start, "end": window_end},
+            params={"query": p99, "start": window_start, "end": window_end},
             rationale="p99 latency during the incident window",
         ),
         LineOfInquiry(
             tool="prometheus.range_query",
-            params={"query": p99_query, "start": baseline_start, "end": baseline_end},
+            params={"query": p99, "start": baseline_start, "end": baseline_end},
             rationale="p99 latency baseline (1h prior)",
         ),
         LineOfInquiry(
             tool="prometheus.range_query",
-            params={"query": pool_query, "start": window_start, "end": window_end},
+            params={"query": pool, "start": window_start, "end": window_end},
             rationale="DB pool utilization during the incident window",
         ),
         LineOfInquiry(
             tool="loki.query_range",
-            params={"query": log_query, "start": window_start, "end": window_end},
+            params={"query": logs, "start": window_start, "end": window_end},
             rationale="error/warning-level logs during the incident window",
         ),
         LineOfInquiry(
