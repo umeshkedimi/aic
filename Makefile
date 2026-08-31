@@ -4,7 +4,7 @@
 	eventbus-up eventbus-down demo-seed demo-services-up demo-services-down \
 	demo-ingest-logs demo-correlator-logs demo-triage-logs demo-investigator-logs \
 	demo-remediator-logs demo-approval-api-logs demo-approval-expirer-logs \
-	demo-executor-logs \
+	demo-executor-logs demo-verifier-logs \
 	llm-up llm-down aic-approve
 
 KIND_CLUSTER := aic-demo
@@ -35,7 +35,7 @@ typecheck:
 		packages/contracts/src packages/contracts/tests \
 		packages/eventbus/src packages/eventbus/tests \
 		packages/agents/src packages/agents/tests
-	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator aic-triage aic-investigator aic-remediator aic-approval-api aic-approval-expirer aic-cli aic-executor; do \
+	for app in payment-service checkout-service toy-ops aic-ingest aic-correlator aic-triage aic-investigator aic-remediator aic-approval-api aic-approval-expirer aic-cli aic-executor aic-verifier; do \
 		uv run mypy apps/$$app/src apps/$$app/tests || exit 1; \
 	done
 
@@ -135,9 +135,9 @@ demo-seed:
 	uv run --package aic-toy-ops seed-service-dependencies
 
 # aic-ingest/aic-correlator/aic-triage/aic-investigator/aic-remediator/
-# aic-approval-api/aic-approval-expirer/aic-executor (T4, T6, T7, T8, T9,
-# T10) run as background host processes, like apps/toy-ops's
-# deploy/load-generator scripts — see the design note in
+# aic-approval-api/aic-approval-expirer/aic-executor/aic-verifier (T4, T6,
+# T7, T8, T9, T10, T11) run as background host processes, like
+# apps/toy-ops's deploy/load-generator scripts — see the design note in
 # infra/kind/eventbus/redpanda.yaml. aic-triage/aic-investigator/
 # aic-remediator additionally require the litellm proxy (make llm-up) to
 # be reachable; aic-investigator mints its own read-only aic-investigator
@@ -145,9 +145,10 @@ demo-seed:
 # write-scoped aic-executor ServiceAccount token (aic-remediator only to
 # attach a dry-run to the approval card, aic-executor to actually execute)
 # from the current kubeconfig at startup (infra/kind/rbac.yaml, T2) — the
-# demo cluster must already exist. aic-approval-api needs
-# AIC_APPROVAL_API_IDENTITIES set (see .env.example) to authenticate any
-# decision at all.
+# demo cluster must already exist. aic-verifier holds neither K8s
+# credential — verification only reads Prometheus/Loki. aic-approval-api
+# needs AIC_APPROVAL_API_IDENTITIES set (see .env.example) to authenticate
+# any decision at all.
 demo-services-up:
 	mkdir -p $(DEMO_RUN_DIR)
 	uv run --package aic-ingest aic-ingest > $(DEMO_RUN_DIR)/aic-ingest.log 2>&1 & \
@@ -166,7 +167,9 @@ demo-services-up:
 		echo $$! > $(DEMO_RUN_DIR)/aic-approval-expirer.pid
 	uv run --package aic-executor aic-executor > $(DEMO_RUN_DIR)/aic-executor.log 2>&1 & \
 		echo $$! > $(DEMO_RUN_DIR)/aic-executor.pid
-	@echo "aic-ingest, aic-correlator, aic-triage, aic-investigator, aic-remediator, aic-approval-api, aic-approval-expirer, and aic-executor started — logs: $(DEMO_RUN_DIR)/*.log"
+	uv run --package aic-verifier aic-verifier > $(DEMO_RUN_DIR)/aic-verifier.log 2>&1 & \
+		echo $$! > $(DEMO_RUN_DIR)/aic-verifier.pid
+	@echo "aic-ingest, aic-correlator, aic-triage, aic-investigator, aic-remediator, aic-approval-api, aic-approval-expirer, aic-executor, and aic-verifier started — logs: $(DEMO_RUN_DIR)/*.log"
 
 demo-services-down:
 	-[ -f $(DEMO_RUN_DIR)/aic-ingest.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-ingest.pid) 2>/dev/null; \
@@ -185,6 +188,8 @@ demo-services-down:
 		rm -f $(DEMO_RUN_DIR)/aic-approval-expirer.pid
 	-[ -f $(DEMO_RUN_DIR)/aic-executor.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-executor.pid) 2>/dev/null; \
 		rm -f $(DEMO_RUN_DIR)/aic-executor.pid
+	-[ -f $(DEMO_RUN_DIR)/aic-verifier.pid ] && kill $$(cat $(DEMO_RUN_DIR)/aic-verifier.pid) 2>/dev/null; \
+		rm -f $(DEMO_RUN_DIR)/aic-verifier.pid
 
 demo-ingest-logs:
 	tail -f $(DEMO_RUN_DIR)/aic-ingest.log
@@ -209,6 +214,9 @@ demo-approval-expirer-logs:
 
 demo-executor-logs:
 	tail -f $(DEMO_RUN_DIR)/aic-executor.log
+
+demo-verifier-logs:
+	tail -f $(DEMO_RUN_DIR)/aic-verifier.log
 
 # `make aic-approve INCIDENT_ID=<uuid>` — the one-command CLI surface
 # (design doc §1.10 APPROVE row, T9). Requires AIC_CLI_DECIDER_ID (and
