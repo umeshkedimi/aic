@@ -16,7 +16,7 @@ from aic_agents.tools.registry import ToolRegistry
 from aic_common.clock import FixedClock
 from aic_common.config import Environment
 from aic_database.models import RCA, Evidence, Hypothesis, Incident, IncidentEvent, IncidentSignal
-from aic_domain.enums import IncidentStatus
+from aic_domain.enums import ActorType, IncidentStatus
 from aic_investigator.main import _find_next_investigating_incident_id, _poll_once
 from pydantic import BaseModel
 from sqlalchemy import delete
@@ -205,6 +205,33 @@ def test_find_next_investigating_incident_id_skips_incidents_that_already_have_a
     result = _find_next_investigating_incident_id(session_factory)
     assert result == still_pending
     assert result != already_done
+
+
+def test_find_next_investigating_incident_id_repicks_after_a_verification_loop_back(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """T11 regression guard: after `verifying -> investigating` (a failed
+    soak check, §6), this incident already has an RCA from its first pass
+    — the old "no RCA yet" rule would never re-select it, silently
+    stalling the one retry the design promises. A `verification_failed`
+    IncidentEvent is what should make it eligible again."""
+    with session_factory() as session:
+        retried = _make_incident(
+            session, status=IncidentStatus.INVESTIGATING, created_at=T0, with_rca=True
+        )
+        session.add(
+            IncidentEvent(
+                incident_id=retried,
+                seq=1,
+                event_type="verification_failed",
+                actor_type=ActorType.SYSTEM,
+                payload={},
+                created_at=T0,
+            )
+        )
+        session.commit()
+
+    assert _find_next_investigating_incident_id(session_factory) == retried
 
 
 def test_find_next_investigating_incident_id_returns_oldest_first(
