@@ -42,9 +42,7 @@ def is_eligible(required_roles: frozenset[str], decider_roles: frozenset[str]) -
     return bool(required_roles & decider_roles)
 
 
-def evaluate_outcome(
-    quorum: int, decisions: list[ApprovalDecisionType]
-) -> ApprovalRequestStatus:
+def evaluate_outcome(quorum: int, decisions: list[ApprovalDecisionType]) -> ApprovalRequestStatus:
     """Compute the request's status from the decisions cast so far.
 
     `decisions` must contain only already-eligible votes (see module

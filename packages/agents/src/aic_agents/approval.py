@@ -120,8 +120,7 @@ def record_decision(
         raise NotFoundError(f"no approval request with id {approval_request_id}")
     if request.status != ApprovalRequestStatus.PENDING.value:
         raise IllegalStateError(
-            f"approval request {approval_request_id} is not pending "
-            f"(status={request.status!r})"
+            f"approval request {approval_request_id} is not pending (status={request.status!r})"
         )
     if clock.now() >= request.expires_at:
         raise IllegalStateError(f"approval request {approval_request_id} has expired")

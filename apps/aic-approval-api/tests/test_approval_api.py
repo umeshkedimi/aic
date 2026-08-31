@@ -99,9 +99,7 @@ def test_get_card_returns_the_approval_details_including_dry_run(
         incident_id, request_id = _seed_pending_approval(session, dry_run_result=dry_run)
 
     with TestClient(_app(session_factory)) as client:
-        resp = client.get(
-            f"/approvals/{request_id}", headers={"Authorization": "Bearer tok_alice"}
-        )
+        resp = client.get(f"/approvals/{request_id}", headers={"Authorization": "Bearer tok_alice"})
 
     assert resp.status_code == 200
     body = resp.json()
@@ -117,9 +115,7 @@ def test_get_card_without_a_dry_run_returns_null(session_factory: sessionmaker[S
         _incident_id, request_id = _seed_pending_approval(session)
 
     with TestClient(_app(session_factory)) as client:
-        resp = client.get(
-            f"/approvals/{request_id}", headers={"Authorization": "Bearer tok_alice"}
-        )
+        resp = client.get(f"/approvals/{request_id}", headers={"Authorization": "Bearer tok_alice"})
 
     assert resp.status_code == 200
     assert resp.json()["dry_run_result"] is None
@@ -136,9 +132,7 @@ def test_get_card_requires_authentication(session_factory: sessionmaker[Session]
 
 def test_get_card_unknown_request_is_not_found(session_factory: sessionmaker[Session]) -> None:
     with TestClient(_app(session_factory)) as client:
-        resp = client.get(
-            f"/approvals/{uuid4()}", headers={"Authorization": "Bearer tok_alice"}
-        )
+        resp = client.get(f"/approvals/{uuid4()}", headers={"Authorization": "Bearer tok_alice"})
     assert resp.status_code == 404
 
 
@@ -185,9 +179,7 @@ def test_missing_token_is_unauthorized(session_factory: sessionmaker[Session]) -
         _incident_id, request_id = _seed_pending_approval(session)
 
     with TestClient(_app(session_factory)) as client:
-        resp = client.post(
-            f"/approvals/{request_id}/decision", json={"decision": "approve"}
-        )
+        resp = client.post(f"/approvals/{request_id}/decision", json={"decision": "approve"})
     assert resp.status_code == 401
 
 

@@ -280,9 +280,7 @@ async def test_attaches_a_dry_run_to_the_approval_card_when_executor_credentials
         calls.append((action_type, raw_params))
         return {"command": ["kubectl", "rollout", "undo"], "returncode": 0}
 
-    monkeypatch.setattr(
-        "aic_agents.remediation.dry_run_action", _fake_dry_run_action, raising=True
-    )
+    monkeypatch.setattr("aic_agents.remediation.dry_run_action", _fake_dry_run_action, raising=True)
 
     with session_factory() as session:
         incident_id, _service = _seed_investigation(session, environment=Environment.PROD)

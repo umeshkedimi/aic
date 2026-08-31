@@ -252,9 +252,7 @@ async def test_execute_action_is_idempotent_on_retry(
         # No duplicate audit rows from the second, no-op call.
         assert _event_types(session, incident_id) == ["action_executed", "actions_executed"]
         records = list(
-            session.execute(
-                select(ExecutionRecord).where(ExecutionRecord.action_id == action_id)
-            )
+            session.execute(select(ExecutionRecord).where(ExecutionRecord.action_id == action_id))
             .scalars()
             .all()
         )

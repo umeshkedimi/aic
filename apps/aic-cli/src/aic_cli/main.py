@@ -125,9 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         engine.dispose()
 
-    print(
-        f"approval {approval_status}; incident {args.incident_id} is now {incident_status}"
-    )
+    print(f"approval {approval_status}; incident {args.incident_id} is now {incident_status}")
     return 0
 
 
