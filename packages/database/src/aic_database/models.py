@@ -240,8 +240,14 @@ class VerificationRecord(Base):
     __tablename__ = "verification_record"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=new_id)
+    # Unique (T11): "exactly one verification per execution" is a DB-level
+    # invariant, not just an application-level idempotency check —
+    # `aic_agents.verification.verify_incident`'s own idempotent-no-op path
+    # is the primary guard, this is the real backstop (same "enforced, not
+    # just convention" precedent as T9's ApprovalDecision immutability
+    # trigger).
     execution_id: Mapped[uuid.UUID] = mapped_column(
-        sa.ForeignKey("execution_record.id"), index=True, nullable=False
+        sa.ForeignKey("execution_record.id"), unique=True, nullable=False
     )
     metric_snapshots: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     passed: Mapped[bool] = mapped_column(sa.Boolean)
