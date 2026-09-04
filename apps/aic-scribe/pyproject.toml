@@ -1,0 +1,33 @@
+[project]
+name = "aic-scribe"
+version = "0.1.0"
+description = "Polls for RESOLVED incidents and runs the learning stage (design doc §1.4 LEARN row, §1.13, T12)."
+requires-python = ">=3.13"
+dependencies = [
+    "aic-common",
+    "aic-domain",
+    "aic-database",
+    "aic-agents",
+    "openai>=1.40",
+]
+
+[project.scripts]
+aic-scribe = "aic_scribe.main:main"
+
+[dependency-groups]
+dev = [
+    "testcontainers[postgres,qdrant]>=4.8",
+]
+
+[tool.uv.sources]
+aic-common = { workspace = true }
+aic-domain = { workspace = true }
+aic-database = { workspace = true }
+aic-agents = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aic_scribe"]
