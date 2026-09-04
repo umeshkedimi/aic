@@ -19,6 +19,7 @@ from aic_database.models import RCA, Evidence, Hypothesis, Incident, IncidentEve
 from aic_domain.enums import ActorType, IncidentStatus
 from aic_investigator.main import _find_next_investigating_incident_id, _poll_once
 from pydantic import BaseModel
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy import delete
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -259,6 +260,7 @@ async def test_poll_once_investigates_and_persists_evidence_and_rca(
         _prometheus_client=httpx.AsyncClient(),
         _loki_client=httpx.AsyncClient(),
         _k8s_client=httpx.AsyncClient(),
+        _qdrant_client=AsyncQdrantClient(url="http://localhost:6333"),
     )
 
     processed = await _poll_once(
@@ -287,6 +289,7 @@ async def test_poll_once_returns_false_when_nothing_to_investigate(
         _prometheus_client=httpx.AsyncClient(),
         _loki_client=httpx.AsyncClient(),
         _k8s_client=httpx.AsyncClient(),
+        _qdrant_client=AsyncQdrantClient(url="http://localhost:6333"),
     )
 
     processed = await _poll_once(session_factory, registry, _FakeLLM(), FixedClock(T0))

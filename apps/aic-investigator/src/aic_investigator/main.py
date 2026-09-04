@@ -39,6 +39,7 @@ from uuid import UUID
 import openai
 from aic_agents.config import LiteLLMSettings
 from aic_agents.graphs.investigation import run_investigation
+from aic_agents.knowledge_store import QdrantSettings, warm_up_embedder
 from aic_agents.litellm_adapter import LiteLLMAdapter
 from aic_agents.port import LLMPort
 from aic_agents.tools.k8s import load_investigator_credentials
@@ -143,10 +144,15 @@ async def run(settings: InvestigatorSettings | None = None) -> None:
         namespace=settings.k8s_namespace,
         token_duration=settings.k8s_token_duration,
     )
+    # Loads the real embedding model now, off the poll loop, so the first
+    # real knowledge.search call doesn't pay its cold-start cost inline
+    # (aic_agents.knowledge_store.warm_up_embedder's own docstring).
+    await warm_up_embedder()
     registry = build_registry(
         prometheus_settings=PrometheusSettings(),
         loki_settings=LokiSettings(),
         k8s_credentials=k8s_credentials,
+        qdrant_settings=QdrantSettings(),
         session_factory=session_factory,
     )
 

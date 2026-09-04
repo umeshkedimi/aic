@@ -14,8 +14,10 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy.orm import Session, sessionmaker
 
+from aic_agents.knowledge_store import QdrantSettings
 from aic_agents.tools import k8s, knowledge, loki, prometheus
 from aic_agents.tools.base import ToolSpec
 from aic_agents.tools.k8s import InvestigatorK8sCredentials
@@ -29,11 +31,13 @@ class ToolRegistry:
     _prometheus_client: httpx.AsyncClient
     _loki_client: httpx.AsyncClient
     _k8s_client: httpx.AsyncClient
+    _qdrant_client: AsyncQdrantClient
 
     async def aclose(self) -> None:
         await self._prometheus_client.aclose()
         await self._loki_client.aclose()
         await self._k8s_client.aclose()
+        await self._qdrant_client.close()
 
 
 def build_registry(
@@ -41,6 +45,7 @@ def build_registry(
     prometheus_settings: PrometheusSettings,
     loki_settings: LokiSettings,
     k8s_credentials: InvestigatorK8sCredentials,
+    qdrant_settings: QdrantSettings,
     session_factory: sessionmaker[Session],
 ) -> ToolRegistry:
     prometheus_client = httpx.AsyncClient(base_url=prometheus_settings.base_url)
@@ -49,6 +54,9 @@ def build_registry(
         base_url=k8s_credentials.server,
         verify=str(k8s_credentials.ca_cert_path),
         headers={"Authorization": f"Bearer {k8s_credentials.token}"},
+    )
+    qdrant_client = AsyncQdrantClient(
+        url=qdrant_settings.base_url, timeout=int(qdrant_settings.timeout_seconds)
     )
 
     specs: dict[str, ToolSpec[Any]] = {}
@@ -61,11 +69,12 @@ def build_registry(
             namespace=k8s_credentials.namespace,
         )
     )
-    specs.update(knowledge.build_specs())
+    specs.update(knowledge.build_specs(qdrant_client, qdrant_settings))
 
     return ToolRegistry(
         specs=specs,
         _prometheus_client=prometheus_client,
         _loki_client=loki_client,
         _k8s_client=k8s_client,
+        _qdrant_client=qdrant_client,
     )
