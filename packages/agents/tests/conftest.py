@@ -7,6 +7,7 @@ from alembic.config import Config
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from testcontainers.community.postgres import PostgresContainer
+from testcontainers.community.qdrant import QdrantContainer
 
 DATABASE_DIR = Path(__file__).resolve().parent.parent.parent / "database"
 
@@ -32,3 +33,12 @@ def session_factory(postgres_url: str) -> Iterator[sessionmaker[Session]]:
         yield sessionmaker(bind=engine, expire_on_commit=False)
     finally:
         engine.dispose()
+
+
+@pytest.fixture(scope="session")
+def qdrant_url() -> Iterator[str]:
+    """A real, ephemeral Qdrant (T12) — shared across every test module in
+    this package that needs one, one container for the whole test session
+    rather than one per module."""
+    with QdrantContainer() as container:
+        yield f"http://{container.rest_host_address}"

@@ -11,11 +11,13 @@ dependencies = [
     "openai>=1.40",
     "langgraph>=1.2.11",
     "httpx>=0.28.1",
+    "qdrant-client>=1.12",
+    "sentence-transformers>=3.0",
 ]
 
 [dependency-groups]
 dev = [
-    "testcontainers>=4.8",
+    "testcontainers[qdrant]>=4.8",
 ]
 
 [tool.uv.sources]
